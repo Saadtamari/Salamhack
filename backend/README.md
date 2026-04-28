@@ -1,0 +1,33 @@
+# Masraf Backend (Express + TypeScript + Drizzle)
+
+This backend is initialized with a clean, modular architecture that follows separation of concerns:
+
+- `modules/*`: feature boundaries (controller, service, repository, routes, validators)
+- `infrastructure/*`: database and external integrations
+- `shared/*`: cross-cutting concerns (errors, middleware, utils)
+- `config/*`: environment and app configuration
+
+## Quick start
+
+1. Copy `.env.example` to `.env`
+2. Install packages:
+   - `npm install`
+3. Run development server:
+   - `npm run dev`
+
+## Scripts
+
+- `npm run dev`: run server with watch mode
+- `npm run build`: compile TypeScript
+- `npm run start`: run compiled server
+- `npm run db:generate`: generate Drizzle migrations
+- `npm run db:migrate`: run migrations
+- `npm run db:push`: push schema to database
+- `npm run typecheck`: TypeScript validation
+
+## Current API
+
+- `GET /health`
+- `GET /api/users`
+- `GET /api/users/:id`
+- `POST /api/users`

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>مصرف — Masraf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="ios-frame.jsx" type="text/babel"></script>
+<script src="masraf-data.js"></script>
+<script src="masraf-screens.jsx" type="text/babel"></script>
+<script src="masraf-shared.jsx" type="text/babel"></script>
+<script src="masraf-voice.jsx" type="text/babel"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #111;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+  }
+
+  /* ── App shell fills the IOSDevice content area ── */
+  .app-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #FAFAF8;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* scrollable screen area */
+  .screen-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen-scroll::-webkit-scrollbar { display: none; }
+
+  /* ── Bottom Nav — sits naturally at bottom of flex col ── */
+  .bottom-nav {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid #E8E5DE;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 0 20px;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: none; border: none; cursor: pointer; padding: 4px 14px;
+    font-family: 'IBM Plex Sans Arabic', sans-serif; min-width: 60px;
+  }
+  .nav-item .nav-icon { font-size: 22px; transition: transform 0.15s; }
+  .nav-item .nav-label { font-size: 10px; color: #9C9C95; font-weight: 500; }
+  .nav-item.active .nav-label { color: #1B5E20; font-weight: 700; }
+  .nav-item.active .nav-icon { transform: scale(1.18); }
+
+  .mic-btn {
+    width: 58px; height: 58px; border-radius: 50%;
+    background: linear-gradient(135deg, #7B1FA2, #AB47BC);
+    border: 3px solid white;
+    box-shadow: 0 4px 20px rgba(123,31,162,0.45);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 24px;
+    margin-top: -20px;
+    flex-shrink: 0;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .mic-btn:hover { transform: scale(1.08); }
+  .mic-btn.active { animation: micPulse 1.2s ease-in-out infinite; }
+
+  @keyframes micPulse {
+    0%,100% { box-shadow: 0 4px 20px rgba(123,31,162,0.45); }
+    50%      { box-shadow: 0 4px 40px rgba(123,31,162,0.85), 0 0 0 10px rgba(123,31,162,0.12); }
+  }
+
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .screen-enter { animation: fadeSlideUp 0.2s ease-out both; }
+
+  /* ── Overlays — absolute within .app-shell ── */
+  .overlay-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+  }
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 90;
+    display: flex;
+    align-items: flex-end;
+  }
+  .sheet {
+    background: #FFFFFF;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px 32px;
+    width: 100%;
+    max-height: 88%;
+    overflow-y: auto;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+  }
+  .sheet-handle {
+    width: 40px; height: 4px; background: #E8E5DE;
+    border-radius: 2px; margin: 0 auto 20px;
+  }
+</style>
+</head>
+<body>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "darkMode": false,
+  "primaryColor": "#1B5E20",
+  "accentColor": "#C6930A",
+  "showBalanceOnDash": true,
+  "voiceColor": "#7B1FA2"
+}/*EDITMODE-END*/;
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+function OnboardingScreen({ onDone }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    { icon:"🕌", title:"مرحباً بك في مصرف", sub:"المستشار المالي الذكي للمستقلين العرب", body:"إدارة فواتيرك، عملائك، ومصاريفك — كل شيء بالعربي وبذكاء اصطناعي.", cta:"ابدأ الآن" },
+    { icon:"🎤", title:"صوتك أمرك", sub:"Jarvis بالعربي", body:'قل: "كم رصيدي؟" أو "أرسل فاتورة لأحمد بـ٥٠٠ دولار" وسيتولى مصرف الباقي.', cta:"التالي" },
+    { icon:"☪️", title:"شريعة أولاً", sub:"تمويل إسلامي أصيل", body:"زكاة تلقائية، مرابحة، وتطهير المبالغ — كل شيء بمبادئ التمويل الإسلامي.", cta:"ادخل التطبيق" },
+  ];
+  const s = steps[step];
+  return (
+    <div style={{ height:"100%", background:"#FAFAF8", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"32px 28px", fontFamily:"IBM Plex Sans Arabic, sans-serif", textAlign:"center", position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:300, background:"linear-gradient(180deg,#1B5E20 0%,transparent 100%)", opacity:0.07 }}></div>
+      <IslamicPattern opacity={0.04} />
+      <div style={{ fontSize:76, marginBottom:28, position:"relative" }}>{s.icon}</div>
+      <div style={{ fontSize:26, fontWeight:900, color:"#1A1A18", marginBottom:8, lineHeight:1.3 }}>{s.title}</div>
+      <div style={{ fontSize:14, fontWeight:700, color:"#1B5E20", marginBottom:14 }}>{s.sub}</div>
+      <div style={{ fontSize:14, color:"#6B6B65", lineHeight:1.85, maxWidth:270, marginBottom:44 }}>{s.body}</div>
+      <div style={{ display:"flex", gap:8, marginBottom:32 }}>
+        {steps.map((_,i) => <div key={i} style={{ width:i===step?24:8, height:8, borderRadius:4, background:i===step?"#1B5E20":"#E8E5DE", transition:"width 0.3s" }}></div>)}
+      </div>
+      <button onClick={() => step < steps.length-1 ? setStep(s=>s+1) : onDone()} style={{ background:"#1B5E20", color:"white", border:"none", borderRadius:16, padding:"15px 0", fontSize:16, fontWeight:700, cursor:"pointer", width:"100%", maxWidth:300, fontFamily:"IBM Plex Sans Arabic" }}>{s.cta}</button>
+      {step < steps.length-1 && <button onClick={onDone} style={{ background:"none", border:"none", color:"#9C9C95", fontSize:13, cursor:"pointer", marginTop:14, fontFamily:"IBM Plex Sans Arabic" }}>تخطّ</button>}
+    </div>
+  );
+}
+
+// ─── More Drawer ───────────────────────────────────────────────────────────────
+function MoreDrawer({ onNavigate, onClose }) {
+  const items = [
+    { icon:"🧮", label:"الزكاة",    page:"zakat",     sub:"احسب وأدّ زكاتك" },
+    { icon:"📎", label:"العقود",    page:"contracts", sub:"تحليل العقود بالذكاء الاصطناعي" },
+    { icon:"💸", label:"المصاريف", page:"expenses",  sub:"تتبع إنفاقك" },
+    { icon:"📊", label:"التقارير", page:"reports",   sub:"ملخصات مالية شهرية" },
+  ];
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <div className="sheet-handle"></div>
+        <div style={{ fontSize:16, fontWeight:800, color:"#1A1A18", marginBottom:16 }}>المزيد</div>
+        {items.map(item => (
+          <button key={item.page} onClick={() => { onNavigate(item.page); onClose(); }}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:14, padding:"13px 0", background:"none", border:"none", borderBottom:"1px solid #F5F5F0", cursor:"pointer", textAlign:"right", fontFamily:"IBM Plex Sans Arabic" }}>
+            <div style={{ width:44, height:44, borderRadius:14, background:"#F5F5F0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{item.icon}</div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1A1A18" }}>{item.label}</div>
+              <div style={{ fontSize:12, color:"#9C9C95" }}>{item.sub}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function MasrafApp() {
+  const [screen, setScreen]       = useState("onboarding");
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [moreOpen, setMoreOpen]   = useState(false);
+  const [tweaks, setTweaks]       = useState(TWEAK_DEFAULTS);
+  const { toasts, toast }         = useToast();
+
+  // Tweaks panel protocol
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === "__activate_edit_mode")   setShowTweaks(true);
+      if (e.data?.type === "__deactivate_edit_mode") setShowTweaks(false);
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+    return () => window.removeEventListener("message", handler);
+  }, []);
+  const [showTweaks, setShowTweaks] = useState(false);
+
+  function setTweak(key, value) {
+    const updates = typeof key === "object" ? key : { [key]: value };
+    setTweaks(t => ({ ...t, ...updates }));
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: updates }, "*");
+  }
+
+  function navigate(page) { setScreen(page); }
+  function handleVoiceCommand(type, payload) { if (type === "navigate") navigate(payload); }
+
+  const screenMap = {
+    dashboard: <DashboardScreen onNavigate={navigate} showBalance={tweaks.showBalanceOnDash} toast={toast} />,
+    invoices:  <InvoicesScreen  onNavigate={navigate} toast={toast} />,
+    clients:   <ClientsScreen   onNavigate={navigate} toast={toast} />,
+    expenses:  <ExpensesScreen  toast={toast} />,
+    zakat:     <ZakatScreen     toast={toast} />,
+    contracts: <ContractsScreen toast={toast} />,
+    reports:   <ReportsScreen   toast={toast} />,
+  };
+
+  if (screen === "onboarding") {
+    return (
+      <IOSDevice width={390} height={844}>
+        <div style={{ height:"100%", overflow:"auto" }}>
+          <OnboardingScreen onDone={() => setScreen("dashboard")} />
+        </div>
+      </IOSDevice>
+    );
+  }
+
+  return (
+    <IOSDevice width={390} height={844}>
+      <div className="app-shell">
+
+        {/* ── Scrollable screen content ── */}
+        <div className="screen-scroll">
+          <ToastContainer toasts={toasts} />
+          <div className="screen-enter" key={screen}>
+            {screenMap[screen] || screenMap.dashboard}
+          </div>
+        </div>
+
+        {/* ── Bottom Nav ── */}
+        <nav className="bottom-nav">
+          {[
+            { page:"dashboard", icon:"🏠", label:"لوحة" },
+            { page:"invoices",  icon:"🧾", label:"فواتير" },
+          ].map(item => (
+            <button key={item.page} onClick={() => navigate(item.page)} className={`nav-item ${screen===item.page?"active":""}`}>
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </button>
+          ))}
+
+          <button className={`mic-btn ${voiceOpen?"active":""}`} onClick={() => setVoiceOpen(true)}>🎤</button>
+
+          {[
+            { page:"clients", icon:"👥", label:"عملاء" },
+            { page:"more",    icon:"☰",  label:"المزيد" },
+          ].map(item => (
+            <button key={item.page}
+              onClick={() => item.page==="more" ? setMoreOpen(true) : navigate(item.page)}
+              className={`nav-item ${screen===item.page?"active":""}`}>
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* ── Overlays (absolute within app-shell) ── */}
+        {voiceOpen && (
+          <div className="overlay-layer">
+            <VoiceOverlay onClose={() => setVoiceOpen(false)} onCommand={(t,p) => { handleVoiceCommand(t,p); setVoiceOpen(false); }} />
+          </div>
+        )}
+
+        {moreOpen && (
+          <div className="overlay-layer" style={{ zIndex:90 }}>
+            <MoreDrawer onNavigate={navigate} onClose={() => setMoreOpen(false)} />
+          </div>
+        )}
+
+        {/* ── Tweaks Panel ── */}
+        {showTweaks && (
+          <div style={{ position:"absolute", bottom:90, left:16, right:16, background:"#FFFFFF", borderRadius:20, padding:"20px", boxShadow:"0 20px 60px rgba(0,0,0,0.25)", zIndex:200, fontFamily:"IBM Plex Sans Arabic, sans-serif" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:"#1A1A18" }}>Tweaks</div>
+              <button onClick={() => { setShowTweaks(false); window.parent.postMessage({type:"__edit_mode_dismissed"},"*"); }}
+                style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#9C9C95", lineHeight:1 }}>✕</button>
+            </div>
+            {[
+              { key:"primaryColor", label:"اللون الأساسي", type:"color" },
+              { key:"accentColor",  label:"لون الذهب",     type:"color" },
+              { key:"voiceColor",   label:"لون المايك",    type:"color" },
+              { key:"showBalanceOnDash", label:"إظهار الرصيد في اللوحة", type:"toggle" },
+              { key:"darkMode",    label:"الوضع الليلي (قريباً)", type:"toggle" },
+            ].map(t => (
+              <div key={t.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 0", borderBottom:"1px solid #F5F5F0" }}>
+                <span style={{ fontSize:13, color:"#1A1A18" }}>{t.label}</span>
+                {t.type==="color" && (
+                  <input type="color" value={tweaks[t.key]} onChange={e => setTweak(t.key, e.target.value)}
+                    style={{ width:36, height:28, border:"none", borderRadius:8, cursor:"pointer", padding:2 }} />
+                )}
+                {t.type==="toggle" && (
+                  <div onClick={() => setTweak(t.key, !tweaks[t.key])}
+                    style={{ width:46, height:26, borderRadius:13, background:tweaks[t.key]?"#1B5E20":"#E8E5DE", cursor:"pointer", position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                    <div style={{ width:22, height:22, borderRadius:"50%", background:"white", position:"absolute", top:2, right:tweaks[t.key]?2:22, transition:"right 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </IOSDevice>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<MasrafApp />);
+</script>
+<div id="root"></div>
+</body>
+</html>

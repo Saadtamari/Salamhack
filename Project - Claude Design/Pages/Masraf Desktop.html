@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>مصرف — Masraf | Desktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="masraf-data.js"></script>
+<script src="masraf-screens.jsx"         type="text/babel"></script>
+<script src="masraf-shared.jsx"          type="text/babel"></script>
+<script src="masraf-voice.jsx"           type="text/babel"></script>
+<script src="masraf-desktop-screens.jsx" type="text/babel"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  background: #F4EDE0;
+  color: #2A2520;
+  direction: rtl;
+}
+
+/* ── Layout ── */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  /* In RTL: row + sidebar-first puts sidebar on the RIGHT naturally */
+}
+
+/* ── Sidebar (RIGHT side in RTL) ── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #0F3D29;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  border-left: 1px solid rgba(0,0,0,0.06);
+}
+.sidebar-pattern {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.06;
+}
+.sidebar-inner { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+.sidebar-logo {
+  padding: 28px 24px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sidebar-logo .logo-mark {
+  width: 46px; height: 46px; border-radius: 12px;
+  background: #C6A35A;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'IBM Plex Sans Arabic', serif;
+  font-size: 26px; font-weight: 800; color: #0F3D29;
+  margin-bottom: 14px;
+}
+.sidebar-logo .logo-name  { font-size: 22px; font-weight: 800; color: #F4EDE0; letter-spacing: -0.5px; }
+.sidebar-logo .logo-sub   { font-size: 11px; color: rgba(244,237,224,0.5); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+
+.nav-links { flex: 1; padding: 16px 12px; overflow-y: auto; }
+.nav-link {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: 10px;
+  cursor: pointer; margin-bottom: 2px;
+  border: none; background: none; width: 100%;
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 15px; font-weight: 500;
+  color: rgba(244,237,224,0.6);
+  transition: all 0.15s; text-align: right;
+  position: relative;
+}
+.nav-link:hover  { background: rgba(198,163,90,0.08); color: #F4EDE0; }
+.nav-link.active { background: transparent; color: #C6A35A; font-weight: 700; }
+.nav-link.active::before {
+  content: ''; position: absolute; right: 0; top: 8px; bottom: 8px;
+  width: 3px; background: #C6A35A; border-radius: 0 3px 3px 0;
+}
+.nav-link .glyph {
+  width: 24px; text-align: center; font-family: 'IBM Plex Sans Arabic', serif;
+  font-size: 16px; font-weight: 600;
+  color: inherit; opacity: 0.8;
+}
+.nav-badge { margin-right: auto; background: #C6A35A; color: #0F3D29; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; }
+
+.sidebar-footer {
+  padding: 16px 12px 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.voice-btn-sidebar {
+  width: 100%; border: 1px solid #C6A35A; cursor: pointer;
+  background: transparent; color: #C6A35A;
+  border-radius: 10px; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 14px; font-weight: 600;
+  margin-bottom: 14px;
+  transition: all 0.15s;
+}
+.voice-btn-sidebar:hover  { background: #C6A35A; color: #0F3D29; }
+.voice-btn-sidebar.active { animation: micPulse 1.2s ease-in-out infinite; background: #C6A35A; color: #0F3D29; }
+.user-pill {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(198,163,90,0.06);
+  cursor: pointer;
+}
+
+/* ── Main area ── */
+.main-area {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0; overflow: hidden;
+}
+
+/* ── Top bar ── */
+.topbar {
+  background: #FBF7F0;
+  border-bottom: 1px solid #E8DFCF;
+  padding: 0 36px;
+  height: 70px;
+  display: flex; align-items: center; gap: 16px;
+  flex-shrink: 0;
+}
+.topbar-title  { font-size: 20px; font-weight: 700; color: #2A2520; flex: 1; letter-spacing: -0.3px; }
+.topbar-title .sub { font-size: 12px; font-weight: 400; color: #8A7F6F; margin-top: 2px; letter-spacing: 0.5px; }
+.topbar-search {
+  display: flex; align-items: center; gap: 10px;
+  background: #FFFFFF; border-radius: 10px; padding: 10px 16px;
+  width: 260px; border: 1px solid #E8DFCF; transition: border 0.15s;
+}
+.topbar-search:focus-within { border-color: #0F3D29; }
+.topbar-search input { background: none; border: none; outline: none; font-size: 13px; font-family: 'IBM Plex Sans Arabic'; color: #2A2520; width: 100%; direction: rtl; }
+.topbar-search input::placeholder { color: #B8AC97; }
+.topbar-icon-btn {
+  width: 42px; height: 42px; border-radius: 10px;
+  border: 1px solid #E8DFCF; background: #FFFFFF; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+  position: relative; color: #5C5346;
+  transition: border 0.15s, color 0.15s;
+}
+.topbar-icon-btn:hover { border-color: #0F3D29; color: #0F3D29; }
+.notif-dot {
+  width: 8px; height: 8px; background: #B71C1C; border-radius: 50%;
+  position: absolute; top: 7px; right: 7px;
+  border: 2px solid white;
+}
+
+/* ── Content ── */
+.content-scroll {
+  flex: 1; overflow-y: auto; padding: 36px 40px;
+  background: #F4EDE0;
+}
+.content-scroll::-webkit-scrollbar { width: 6px; }
+.content-scroll::-webkit-scrollbar-track { background: transparent; }
+.content-scroll::-webkit-scrollbar-thumb { background: #D9CBB0; border-radius: 3px; }
+
+/* ── Onboarding full ── */
+.onboarding-full {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: #FAFAF8; position: relative; overflow: hidden;
+}
+
+@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+.screen-enter { animation: fadeUp 0.22s ease-out both; }
+
+@keyframes micPulse {
+  0%,100% { box-shadow: 0 4px 20px rgba(123,31,162,0.4); }
+  50%      { box-shadow: 0 4px 40px rgba(123,31,162,0.8); }
+}
+</style>
+</head>
+<body>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "primaryColor": "#1B5E20",
+  "accentColor": "#C6930A",
+  "voiceColor": "#7B1FA2",
+  "sidebarWidth": 260,
+  "compactMode": false
+}/*EDITMODE-END*/;
+
+const NAV_ITEMS = [
+  { key:"dashboard", glyph:"•", label:"لوحة التحكم",  badge:0 },
+  { key:"invoices",  glyph:"•", label:"الفواتير",     badge:2 },
+  { key:"clients",   glyph:"•", label:"العملاء",      badge:0 },
+  { key:"expenses",  glyph:"•", label:"المصاريف",     badge:0 },
+  { key:"zakat",     glyph:"•", label:"الزكاة",       badge:0 },
+  { key:"contracts", glyph:"•", label:"العقود",       badge:1 },
+  { key:"reports",   glyph:"•", label:"التقارير",     badge:0 },
+  { key:"settings",  glyph:"•", label:"الإعدادات",    badge:0 },
+];
+
+const PAGE_TITLES = {
+  dashboard: { ar:"لوحة التحكم",   sub:"AHLAN — DASHBOARD" },
+  invoices:  { ar:"الفواتير",       sub:"INVOICES" },
+  clients:   { ar:"العملاء",        sub:"CLIENTS" },
+  expenses:  { ar:"المصاريف",       sub:"EXPENSES" },
+  zakat:     { ar:"الزكاة",         sub:"ZAKAT" },
+  contracts: { ar:"العقود",         sub:"CONTRACTS" },
+  reports:   { ar:"التقارير",       sub:"REPORTS" },
+  settings:  { ar:"الإعدادات",      sub:"SETTINGS" },
+};
+
+// ─── Desktop Onboarding ────────────────────────────────────────────────────────
+function DesktopOnboarding({ onDone }) {
+  const [step, setStep] = useState(0);
+  const [persona, setPersona] = useState("abdullah");
+  const [form, setForm] = useState({ name:"", business:"", type:"freelancer", currency:"USD", vat:"16" });
+
+  const steps = [
+    {
+      title:"مرحباً بك في مصرف",
+      sub:"المستشار المالي الذكي للمستقلين العرب",
+      content: (
+        <div style={{ textAlign:"center", padding:"20px 0 32px" }}>
+          <div style={{ fontSize:80, marginBottom:24 }}>🕌</div>
+          <div style={{ fontSize:16, color:"#6B6B65", lineHeight:1.9, maxWidth:480, margin:"0 auto" }}>
+            إدارة فواتيرك، عملائك، ومصاريفك — كل شيء بالعربي وبذكاء اصطناعي يفهم السياق الثقافي والإسلامي.
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"أخبرنا عنك",
+      sub:"سنخصّص تجربتك بناءً على معلوماتك",
+      content: (
+        <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:480, width:"100%" }}>
+          {[
+            { k:"name", l:"اسمك الكامل", ph:"مثال: أحمد الشمري" },
+            { k:"business", l:"اسم نشاطك التجاري", ph:"مثال: شمري للتصميم" },
+          ].map(f => (
+            <div key={f.k}>
+              <label style={{ fontSize:12, color:"#6B6B65", display:"block", marginBottom:6 }}>{f.l}</label>
+              <input value={form[f.k]} onChange={e => setForm(p=>({...p,[f.k]:e.target.value}))} placeholder={f.ph}
+                style={{ width:"100%", padding:"12px 16px", border:"1px solid #E8E5DE", borderRadius:14, fontSize:15, fontFamily:"IBM Plex Sans Arabic", direction:"rtl", background:"#FAFAF8", outline:"none" }} />
+            </div>
+          ))}
+          <div>
+            <label style={{ fontSize:12, color:"#6B6B65", display:"block", marginBottom:8 }}>نوع النشاط</label>
+            <div style={{ display:"flex", gap:8 }}>
+              {[{k:"freelancer",l:"مستقل 👨‍💻"},{k:"small_business",l:"شركة صغيرة 🏢"},{k:"agency",l:"وكالة 🎯"}].map(t=>(
+                <button key={t.k} onClick={()=>setForm(p=>({...p,type:t.k}))} style={{ flex:1, background:form.type===t.k?"#1B5E20":"#F5F5F0", color:form.type===t.k?"white":"#1A1A18", border:"none", borderRadius:12, padding:"10px 6px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"IBM Plex Sans Arabic" }}>{t.l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>
+              <label style={{ fontSize:12, color:"#6B6B65", display:"block", marginBottom:6 }}>العملة</label>
+              <select value={form.currency} onChange={e=>setForm(p=>({...p,currency:e.target.value}))} style={{ width:"100%", padding:"11px 14px", border:"1px solid #E8E5DE", borderRadius:12, fontSize:14, fontFamily:"IBM Plex Sans Arabic", direction:"rtl", background:"#FAFAF8" }}>
+                <option value="USD">دولار أمريكي (USD)</option>
+                <option value="SAR">ريال سعودي (SAR)</option>
+                <option value="AED">درهم إماراتي (AED)</option>
+                <option value="JOD">دينار أردني (JOD)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:12, color:"#6B6B65", display:"block", marginBottom:6 }}>نسبة ضريبة القيمة المضافة</label>
+              <input type="number" value={form.vat} onChange={e=>setForm(p=>({...p,vat:e.target.value}))} style={{ width:"100%", padding:"11px 14px", border:"1px solid #E8E5DE", borderRadius:12, fontSize:14, fontFamily:"IBM Plex Sans Arabic", direction:"rtl", background:"#FAFAF8", outline:"none" }} />
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"اختر صوت مساعدك",
+      sub:"سيُجيبك مصرف بهذا الصوت عند استخدام الأوامر الصوتية",
+      content: (
+        <div style={{ maxWidth:400, width:"100%" }}>
+          <VoicePersonaSelector value={persona} onChange={setPersona} />
+          <div style={{ background:"#F5F5F0", borderRadius:14, padding:"14px 18px", marginTop:20, fontSize:13, color:"#6B6B65", lineHeight:1.8 }}>
+            🎤 جرّب قول: "كم رصيدي؟" أو "أرسل فاتورة لأحمد بـ٥٠٠ دولار"<br/>
+            سيرد عليك <strong style={{ color:"#7B1FA2" }}>{persona === "abdullah" ? "عبدالله" : "شا"}</strong> بصوت عربي سعودي طبيعي
+          </div>
+        </div>
+      )
+    },
+  ];
+
+  const s = steps[Math.min(step, steps.length - 1)];
+  return (
+    <div className="onboarding-full">
+      <IslamicPattern opacity={0.03} />
+      <div style={{ position:"relative", zIndex:1, display:"flex", gap:80, alignItems:"center", maxWidth:1100, width:"100%", padding:"0 60px" }}>
+        {/* Left panel */}
+        <div style={{ flex:"0 0 340px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ width:52, height:52, borderRadius:16, background:"#1B5E20", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, marginBottom:8 }}>🕌</div>
+          <div style={{ fontSize:32, fontWeight:900, color:"#1A1A18", lineHeight:1.2 }}>{s.title}</div>
+          <div style={{ fontSize:15, color:"#6B6B65", marginTop:6, lineHeight:1.7 }}>{s.sub}</div>
+          {/* Step progress */}
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:32 }}>
+            {steps.map((_,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:i<step?"#1B5E20":i===step?"#1B5E20":"#E8E5DE", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, color:i<=step?"white":"#9C9C95", fontWeight:700, flexShrink:0 }}>
+                  {i < step ? "✓" : i+1}
+                </div>
+                <div style={{ fontSize:13, color:i===step?"#1A1A18":"#9C9C95", fontWeight:i===step?700:400 }}>
+                  {["معلومات البداية","ملفك الشخصي","صوت المساعد"][i]}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: content card */}
+        <div style={{ flex:1, background:"#FFFFFF", borderRadius:24, padding:"40px 48px", boxShadow:"0 20px 60px rgba(0,0,0,0.08)", display:"flex", flexDirection:"column", alignItems:"center" }}>
+          <div className="screen-enter" key={step} style={{ width:"100%", display:"flex", flexDirection:"column", alignItems:"center" }}>
+            {s.content}
+          </div>
+          <div style={{ display:"flex", gap:12, marginTop:32, width:"100%", maxWidth:480 }}>
+            {step > 0 && <button onClick={() => setStep(s=>s-1)} style={{ flex:1, background:"#F5F5F0", color:"#1A1A18", border:"none", borderRadius:14, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"IBM Plex Sans Arabic" }}>→ رجوع</button>}
+            <button onClick={() => step < steps.length-1 ? setStep(s=>s+1) : onDone(form, persona)}
+              style={{ flex:2, background:"#1B5E20", color:"white", border:"none", borderRadius:14, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"IBM Plex Sans Arabic" }}>
+              {step < steps.length-1 ? "التالي ←" : "ابدأ استخدام مصرف ✓"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen,     setScreen]     = useState("onboarding");
+  const [voiceOpen,  setVoiceOpen]  = useState(false);
+  const [showTweaks, setShowTweaks] = useState(false);
+  const [tweaks,     setTweaks]     = useState(TWEAK_DEFAULTS);
+  const { toasts, toast }           = useToast();
+
+  useEffect(() => {
+    const handler = e => {
+      if (e.data?.type === "__activate_edit_mode")   setShowTweaks(true);
+      if (e.data?.type === "__deactivate_edit_mode") setShowTweaks(false);
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  function setTweak(k, v) {
+    const u = typeof k==="object" ? k : { [k]: v };
+    setTweaks(t => ({ ...t, ...u }));
+    window.parent.postMessage({ type:"__edit_mode_set_keys", edits:u }, "*");
+  }
+
+  function handleVoiceCommand(type, payload) {
+    if (type === "navigate") setScreen(payload);
+  }
+
+  // ─── Desktop Settings Screen ───
+  function DesktopSettings({ toast, tweaks, setTweak }) {
+    const [profile, setProfile] = useState({
+      name:"أحمد الشمري", business:"شمري للتصميم",
+      email:"ahmad@shamri.design", phone:"+962 79 555 0123",
+      currency: window.MASRAF_CURRENCY || "USD", vat:"16", language:"ar", persona:"abdullah"
+    });
+    function save(k, v) {
+      setProfile(p => ({ ...p, [k]: v }));
+      if (k === "currency") { window.MASRAF_CURRENCY = v; toast(`تم التحويل إلى ${v}`, "success"); }
+    }
+    const sections = [
+      { id:"profile", label:"الملف الشخصي", fields:[
+        { k:"name", l:"الاسم الكامل" },
+        { k:"business", l:"اسم النشاط التجاري" },
+        { k:"email", l:"البريد الإلكتروني" },
+        { k:"phone", l:"رقم الهاتف" },
+      ]},
+      { id:"finance", label:"الإعدادات المالية", fields:[
+        { k:"currency", l:"العملة", type:"select", opts:[["USD","دولار أمريكي"],["SAR","ريال سعودي"],["AED","درهم إماراتي"],["JOD","دينار أردني"],["EGP","جنيه مصري"],["KWD","دينار كويتي"]] },
+        { k:"vat", l:"نسبة ضريبة القيمة المضافة (%)" },
+      ]},
+      { id:"voice", label:"المساعد الصوتي", fields:[
+        { k:"persona", l:"صوت المساعد", type:"persona" },
+      ]},
+    ];
+    return (
+      <div style={{ maxWidth:880 }}>
+        <div style={{ marginBottom:32 }}>
+          <div style={{ fontSize:30, fontWeight:800, color:"#2A2520", letterSpacing:"-0.5px" }}>الإعدادات</div>
+          <div style={{ fontSize:14, color:"#8A7F6F", marginTop:6 }}>خصّص مصرف ليناسب عملك</div>
+        </div>
+        {sections.map(sec => (
+          <div key={sec.id} style={{ background:"#FFFFFF", borderRadius:14, padding:"28px 32px", border:"1px solid #E8DFCF", marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#C6A35A", letterSpacing:2, marginBottom:18, textTransform:"uppercase" }}>{sec.label}</div>
+            {sec.fields.map(f => (
+              <div key={f.k} style={{ display:"grid", gridTemplateColumns:"200px 1fr", gap:24, alignItems:"center", padding:"14px 0", borderBottom:"1px solid #F4EDE0" }}>
+                <label style={{ fontSize:14, color:"#5C5346", fontWeight:500 }}>{f.l}</label>
+                {f.type === "select" ? (
+                  <select value={profile[f.k]} onChange={e => save(f.k, e.target.value)} style={{ padding:"10px 14px", border:"1px solid #E8DFCF", borderRadius:10, fontSize:14, fontFamily:"IBM Plex Sans Arabic", direction:"rtl", background:"#FBF7F0", color:"#2A2520" }}>
+                    {f.opts.map(([v,l]) => <option key={v} value={v}>{l} ({v})</option>)}
+                  </select>
+                ) : f.type === "persona" ? (
+                  <div style={{ display:"flex", gap:10 }}>
+                    {[{k:"abdullah",l:"عبدالله",sub:"صوت ذكوري"},{k:"sha",l:"شا",sub:"صوت أنثوي"}].map(p => (
+                      <button key={p.k} onClick={() => save("persona", p.k)} style={{ flex:1, padding:"12px 16px", border:`1px solid ${profile.persona===p.k?"#0F3D29":"#E8DFCF"}`, background:profile.persona===p.k?"#0F3D29":"#FBF7F0", color:profile.persona===p.k?"#F4EDE0":"#2A2520", borderRadius:10, cursor:"pointer", fontFamily:"IBM Plex Sans Arabic", textAlign:"right" }}>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{p.l}</div>
+                        <div style={{ fontSize:11, opacity:0.7, marginTop:2 }}>{p.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input value={profile[f.k]} onChange={e => save(f.k, e.target.value)} style={{ padding:"10px 14px", border:"1px solid #E8DFCF", borderRadius:10, fontSize:14, fontFamily:"IBM Plex Sans Arabic", direction:"rtl", background:"#FBF7F0", color:"#2A2520" }} />
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+        <div style={{ background:"#FFFFFF", borderRadius:14, padding:"28px 32px", border:"1px solid #E8DFCF", marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#C6A35A", letterSpacing:2, marginBottom:18, textTransform:"uppercase" }}>الحساب</div>
+          <button onClick={() => toast("جاري تصدير بياناتك...","info")} style={{ background:"#FBF7F0", border:"1px solid #E8DFCF", borderRadius:10, padding:"11px 20px", fontSize:14, fontWeight:600, color:"#2A2520", cursor:"pointer", marginLeft:10, fontFamily:"IBM Plex Sans Arabic" }}>تصدير البيانات</button>
+          <button onClick={() => toast("تم تسجيل الخروج","info")} style={{ background:"transparent", border:"1px solid #B71C1C", color:"#B71C1C", borderRadius:10, padding:"11px 20px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"IBM Plex Sans Arabic" }}>تسجيل الخروج</button>
+        </div>
+      </div>
+    );
+  }
+
+  const screenMap = {
+    dashboard: <DesktopDashboard onNavigate={setScreen} toast={toast} />,
+    invoices:  <DesktopInvoices  toast={toast} />,
+    clients:   <DesktopClients   toast={toast} />,
+    expenses:  <DesktopExpenses  toast={toast} />,
+    zakat:     <DesktopZakat     toast={toast} />,
+    contracts: <DesktopContracts toast={toast} />,
+    reports:   <DesktopReports   toast={toast} />,
+    settings:  <DesktopSettings  toast={toast} tweaks={tweaks} setTweak={setTweak} />,
+  };
+
+  if (screen === "onboarding") {
+    return <DesktopOnboarding onDone={(form, persona) => {
+      if (form?.currency) window.MASRAF_CURRENCY = form.currency;
+      setScreen("dashboard");
+      setTimeout(() => toast("أهلاً بك في مصرف","success","بدأنا"), 200);
+    }} />;
+  }
+
+  return (
+    <div className="app-layout">
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        <svg className="sidebar-pattern" viewBox="0 0 200 600" preserveAspectRatio="xMidYMid slice">
+          {Array.from({length:8}).map((_,r) => Array.from({length:6}).map((_,c) => (
+            <polygon key={`${r}-${c}`} points={`${c*40+20},${r*80+4} ${c*40+36},${r*80+12} ${c*40+36},${r*80+28} ${c*40+20},${r*80+36} ${c*40+4},${r*80+28} ${c*40+4},${r*80+12}`}
+              fill="none" stroke="white" strokeWidth="0.6" />
+          )))}
+        </svg>
+        <div className="sidebar-inner">
+          <div className="sidebar-logo">
+            <div className="logo-mark">🕌</div>
+            <div className="logo-name">مصرف</div>
+            <div className="logo-sub">Masraf · المستشار المالي الذكي</div>
+          </div>
+
+          <nav className="nav-links">
+            {NAV_ITEMS.map(item => (
+              <button key={item.key} onClick={() => setScreen(item.key)} className={`nav-link ${screen===item.key?"active":""}`}>
+                <span className="glyph">{item.glyph}</span>
+                <span style={{ flex:1 }}>{item.label}</span>
+                {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+              </button>
+            ))}
+          </nav>
+
+          <div className="sidebar-footer">
+            <button onClick={() => setVoiceOpen(true)} className={`voice-btn-sidebar ${voiceOpen?"active":""}`}>
+              <span style={{ fontSize:14, letterSpacing:2 }}>●●●</span>
+              <span>تحدّث مع مصرف</span>
+            </button>
+            <div className="user-pill" onClick={() => setScreen("settings")}>
+              <div style={{ width:34, height:34, borderRadius:10, background:"#C6A35A", color:"#0F3D29", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800 }}>أش</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#F4EDE0" }}>أحمد الشمري</div>
+                <div style={{ fontSize:10, color:"rgba(244,237,224,0.5)" }}>شمري للتصميم</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <div className="main-area">
+        {/* Top bar */}
+        <header className="topbar">
+          <div className="topbar-title">
+            {(PAGE_TITLES[screen] || {}).ar || ""}
+            <div className="sub">{(PAGE_TITLES[screen] || {}).sub || ""}</div>
+          </div>
+          <div className="topbar-search">
+            <span style={{ color:"#B8AC97", fontSize:14 }}>⌕</span>
+            <input placeholder="ابحث..." />
+          </div>
+          <button className="topbar-icon-btn" onClick={() => toast("لا توجد إشعارات جديدة","info")} title="الإشعارات">
+            <span style={{ fontSize:14, fontWeight:600 }}>إشعارات</span>
+            <div className="notif-dot"></div>
+          </button>
+          <a href="Masraf.html" style={{ background:"#FFFFFF", border:"1px solid #E8DFCF", borderRadius:10, padding:"10px 16px", fontSize:13, fontWeight:600, color:"#5C5346", textDecoration:"none" }}>
+            النسخة المحمولة
+          </a>
+        </header>
+
+        {/* Content */}
+        <main className="content-scroll" style={{ position:"relative" }}>
+          <ToastContainer toasts={toasts} />
+          <div className="screen-enter" key={screen}>
+            {screenMap[screen] || screenMap.dashboard}
+          </div>
+
+          {/* Tweaks Panel */}
+          {showTweaks && (
+            <div style={{ position:"fixed", bottom:24, left:24, width:300, background:"#FFFFFF", borderRadius:20, padding:"20px", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", zIndex:300, fontFamily:"IBM Plex Sans Arabic, sans-serif" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:"#1A1A18" }}>Tweaks</div>
+                <button onClick={() => { setShowTweaks(false); window.parent.postMessage({type:"__edit_mode_dismissed"},"*"); }}
+                  style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#9C9C95" }}>✕</button>
+              </div>
+              {[
+                { key:"primaryColor", label:"اللون الأساسي (أخضر)", type:"color" },
+                { key:"accentColor",  label:"لون الذهب",            type:"color" },
+                { key:"voiceColor",   label:"لون المساعد الصوتي",   type:"color" },
+                { key:"compactMode",  label:"وضع مضغوط",            type:"toggle" },
+              ].map(t => (
+                <div key={t.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 0", borderBottom:"1px solid #F5F5F0" }}>
+                  <span style={{ fontSize:13, color:"#1A1A18" }}>{t.label}</span>
+                  {t.type==="color" && <input type="color" value={tweaks[t.key]} onChange={e => setTweak(t.key, e.target.value)} style={{ width:36, height:28, border:"none", borderRadius:8, cursor:"pointer" }} />}
+                  {t.type==="toggle" && (
+                    <div onClick={() => setTweak(t.key, !tweaks[t.key])} style={{ width:46, height:26, borderRadius:13, background:tweaks[t.key]?"#1B5E20":"#E8E5DE", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+                      <div style={{ width:22, height:22, borderRadius:"50%", background:"white", position:"absolute", top:2, right:tweaks[t.key]?2:22, transition:"right 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}></div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Voice overlay — fills entire viewport */}
+      {voiceOpen && (
+        <div style={{ position:"fixed", inset:0, zIndex:500 }}>
+          <VoiceOverlay onClose={() => setVoiceOpen(false)} onCommand={(t,p) => { handleVoiceCommand(t,p); setVoiceOpen(false); }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<div id="root"></div>
+</body>
+</html>

@@ -2,10 +2,11 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 import { errorHandler } from "./shared/http/error-handler.js";
 import { notFoundHandler } from "./shared/http/not-found.js";
 import { healthRouter } from "./modules/health/health.routes.js";
-import { usersRouter } from "./modules/users/users.routes.js";
 
 export function createApp() {
   const app = express();
@@ -22,8 +23,10 @@ export function createApp() {
     });
   });
 
+  // ── Swagger Documentation ──
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+
   app.use("/health", healthRouter);
-  app.use("/api/users", usersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

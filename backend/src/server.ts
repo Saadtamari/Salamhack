@@ -5,4 +5,7 @@ const app = createApp();
 
 app.listen(env.PORT, () => {
   console.log(`Masraf backend is running on http://localhost:${env.PORT}`);
+  console.log(
+    `Masraf backend Docs is running on http://localhost:${env.PORT}/api-docs`,
+  );
 });

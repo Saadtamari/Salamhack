@@ -31,3 +31,11 @@ This backend is initialized with a clean, modular architecture that follows sepa
 - `GET /api/users`
 - `GET /api/users/:id`
 - `POST /api/users`
+
+## Supabase Storage
+
+The backend now includes a reusable storage integration for Supabase buckets.
+
+- Configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_STORAGE_BUCKET` in your `.env`
+- Use `src/infrastructure/storage/supabase-storage.ts` for uploads, deletes, and signed/public URLs
+- Store files by prefix, for example `contracts/`, `invoices/`, `reports/`, or `images/`

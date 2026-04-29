@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:seed": "tsx src/scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint:check": "tsc --noEmit"
   },
@@ -20,6 +21,7 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
+    "@types/pdfkit": "^0.17.6",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -27,6 +29,7 @@
     "helmet": "^8.1.0",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+    "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "postgres": "^3.4.9",
     "swagger-jsdoc": "^6.2.8",

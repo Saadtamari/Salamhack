@@ -10,6 +10,8 @@ import { healthRouter } from "./modules/health/health.routes.js";
 import  storageRouter  from "./modules/storage/storage.routes.js";
 import { clientsRouter } from "./modules/clients/clients.routes.js";
 import { transactionsRouter } from "./modules/transactions/transactions.routes.js";
+import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
+import { contractsRouter } from "./modules/contracts/contracts.routes.js";
 
 export function createApp() {
   const app = express();
@@ -32,6 +34,8 @@ export function createApp() {
 
   app.use("/health", healthRouter);
   app.use("/api/clients", clientsRouter);
+  app.use("/api/invoices", invoicesRouter);
+  app.use("/api/contracts", contractsRouter);
   app.use("/api/transactions", transactionsRouter);
   app.use("/api/storage", storageRouter);
   app.use("/storage", storageRouter);

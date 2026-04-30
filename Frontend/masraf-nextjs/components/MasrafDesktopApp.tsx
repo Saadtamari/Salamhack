@@ -1,7 +1,20 @@
 "use client";
 import React, { useState } from "react";
+import {
+  Agreement01Icon,
+  AiVoiceIcon,
+  ChartBarLineIcon,
+  DashboardSquare01Icon,
+  Invoice03Icon,
+  Money03Icon,
+  UserMultipleIcon,
+  ZakatIcon,
+} from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
 import { useToast } from "@/lib/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
+import { VoiceOverlay } from "@/components/VoiceOverlay";
+import { MasrafIcon } from "@/components/icons";
 import {
   DesktopDashboard, DesktopInvoices, DesktopClients,
   DesktopExpenses, DesktopZakat, DesktopContracts, DesktopReports,
@@ -9,22 +22,27 @@ import {
 
 type Page = "dashboard" | "invoices" | "clients" | "expenses" | "zakat" | "contracts" | "reports";
 
-const NAV_ITEMS = [
-  { page: "dashboard" as Page, icon: "🏠", label: "لوحة التحكم" },
-  { page: "invoices"  as Page, icon: "🧾", label: "الفواتير"    },
-  { page: "clients"   as Page, icon: "👥", label: "العملاء"     },
-  { page: "expenses"  as Page, icon: "💸", label: "المصاريف"    },
-  { page: "zakat"     as Page, icon: "🧮", label: "الزكاة"      },
-  { page: "contracts" as Page, icon: "📎", label: "العقود"      },
-  { page: "reports"   as Page, icon: "📊", label: "التقارير"    },
+const NAV_ITEMS: { page: Page; icon: IconSvgElement; label: string }[] = [
+  { page: "dashboard", icon: DashboardSquare01Icon, label: "لوحة التحكم" },
+  { page: "invoices", icon: Invoice03Icon, label: "الفواتير" },
+  { page: "clients", icon: UserMultipleIcon, label: "العملاء" },
+  { page: "expenses", icon: Money03Icon, label: "المصاريف" },
+  { page: "zakat", icon: ZakatIcon, label: "الزكاة" },
+  { page: "contracts", icon: Agreement01Icon, label: "العقود" },
+  { page: "reports", icon: ChartBarLineIcon, label: "التقارير" },
 ];
 
 export default function MasrafDesktopApp() {
   const [screen, setScreen] = useState<Page>("dashboard");
-  const { toasts, toast }   = useToast();
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const { toasts, toast } = useToast();
+
+  function navigate(page: string) {
+    setScreen(page as Page);
+  }
 
   const screenMap: Record<Page, React.ReactNode> = {
-    dashboard: <DesktopDashboard onNavigate={(p) => setScreen(p as Page)} toast={toast} />,
+    dashboard: <DesktopDashboard onNavigate={navigate} toast={toast} />,
     invoices:  <DesktopInvoices  toast={toast} />,
     clients:   <DesktopClients   toast={toast} />,
     expenses:  <DesktopExpenses  toast={toast} />,
@@ -34,53 +52,61 @@ export default function MasrafDesktopApp() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#F5F5F0", fontFamily: "IBM Plex Sans Arabic, sans-serif", direction: "rtl", position: "relative" }}>
+    <div style={{ display: "flex", height: "100vh", background: "#F7F4EE", fontFamily: "var(--font-ar)", direction: "rtl", position: "relative", color: "#11100E" }}>
       <ToastContainer toasts={toasts} />
 
-      {/* Sidebar */}
-      <aside style={{ width: 240, background: "#1B5E20", display: "flex", flexDirection: "column", padding: "28px 0", flexShrink: 0 }}>
-        {/* Logo */}
+      <aside style={{ width: 248, background: "#11100E", color: "#FFFDF8", display: "flex", flexDirection: "column", padding: "28px 0", flexShrink: 0, borderLeft: "1px solid rgba(255,253,248,0.08)" }}>
         <div style={{ padding: "0 24px 32px" }}>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#FFFFFF", letterSpacing: "-0.5px" }}>مصرف</div>
-          <div style={{ fontSize: 11, color: "#A5D6A7", marginTop: 2 }}>Masraf · المستقلون العرب</div>
+          <div style={{ fontSize: 27, fontWeight: 900, color: "#FFFDF8", letterSpacing: 0 }}>مصرف</div>
+          <div style={{ fontSize: 12, color: "rgba(255,253,248,0.58)", marginTop: 4, lineHeight: 1.5 }}>Masraf · المستقلون العرب</div>
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1 }}>
-          {NAV_ITEMS.map((item) => (
-            <button key={item.page} onClick={() => setScreen(item.page)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 24px", background: screen === item.page ? "rgba(255,255,255,0.15)" : "transparent",
-                border: "none", borderRight: screen === item.page ? "3px solid #FFFFFF" : "3px solid transparent",
-                color: screen === item.page ? "#FFFFFF" : "#A5D6A7",
-                cursor: "pointer", textAlign: "right", fontFamily: "IBM Plex Sans Arabic, sans-serif",
-                fontSize: 14, fontWeight: screen === item.page ? 700 : 400,
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => { if (screen !== item.page) e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-              onMouseLeave={(e) => { if (screen !== item.page) e.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+        <nav style={{ flex: 1, padding: "0 12px" }}>
+          {NAV_ITEMS.map((item) => {
+            const active = screen === item.page;
+            return (
+              <button key={item.page} onClick={() => setScreen(item.page)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 14px", background: active ? "rgba(255,253,248,0.10)" : "transparent",
+                  border: "none", borderRadius: 10,
+                  color: active ? "#FFFDF8" : "rgba(255,253,248,0.60)",
+                  cursor: "pointer", textAlign: "right", fontFamily: "var(--font-ar)",
+                  fontSize: 15, fontWeight: active ? 850 : 650,
+                  transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "rgba(255,253,248,0.06)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+              >
+                <span style={{ color: active ? "#F0C542" : "currentColor" }}>
+                  <MasrafIcon icon={item.icon} size={20} color="currentColor" strokeWidth={active ? 2 : 1.7} />
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
-        {/* User info */}
-        <div style={{ padding: "20px 24px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "white" }}>أش</div>
+        <div style={{ padding: "20px 24px", borderTop: "1px solid rgba(255,253,248,0.10)" }}>
+          <button onClick={() => setVoiceOpen(true)} style={{ width: "100%", background: "#FFFDF8", color: "#11100E", border: "none", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, cursor: "pointer", fontFamily: "var(--font-ar)", fontWeight: 850, boxShadow: "0 0 0 4px rgba(240,197,66,0.10)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <MasrafIcon icon={AiVoiceIcon} size={20} color="#11100E" />
+              المساعد الصوتي
+            </span>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F0C542" }} />
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
+            <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#F0C542", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#11100E" }}>أش</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF" }}>أحمد الشمري</div>
-              <div style={{ fontSize: 11, color: "#A5D6A7" }}>شمري للتصميم</div>
+              <div style={{ fontSize: 14, fontWeight: 850, color: "#FFFDF8" }}>أحمد الشمري</div>
+              <div style={{ fontSize: 12, color: "rgba(255,253,248,0.55)" }}>شمري للتصميم</div>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main style={{ flex: 1, overflow: "auto", padding: "32px" }}>
+      <main style={{ flex: 1, overflow: "auto", padding: "32px", background: "#F7F4EE" }}>
         <div key={screen} style={{ animation: "fadeIn 0.2s ease-out" }}>
           {screenMap[screen]}
         </div>
@@ -91,6 +117,16 @@ export default function MasrafDesktopApp() {
           }
         `}</style>
       </main>
+
+      {voiceOpen && (
+        <VoiceOverlay
+          onClose={() => setVoiceOpen(false)}
+          onCommand={(type, payload) => {
+            if (type === "navigate") navigate(payload);
+            setVoiceOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

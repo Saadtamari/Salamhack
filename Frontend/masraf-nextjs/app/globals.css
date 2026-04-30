@@ -1,6 +1,50 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'IBM Plex Sans Arabic', sans-serif;
-  background: #F5F5F0;
+
+:root {
+  --paper: #f7f4ee;
+  --paper-soft: #f1ede5;
+  --surface: #fffdf8;
+  --ink: #11100e;
+  --ink-soft: #2c2924;
+  --muted: #6d675e;
+  --muted-light: #92897c;
+  --line: #ddd6ca;
+  --accent: #f0c542;
+  --accent-deep: #9c7614;
+  --success: #147a41;
+  --danger: #b3261e;
+  --warning: #8a6400;
+  --font-ar: "IBM Plex Sans Arabic", "Noto Kufi Arabic", system-ui, sans-serif;
 }
+
+html,
+body {
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-ar);
+  font-weight: 500;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--ink);
+}
+
 ::-webkit-scrollbar { display: none; }

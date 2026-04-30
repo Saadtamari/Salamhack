@@ -55,11 +55,11 @@ export const MASRAF_DATA = {
   ],
 
   expenseCategories: [
-    { name: "برمجيات وأدوات", nameEn: "Software",  amount: 98, color: "#1B5E20", pct: 40 },
-    { name: "طعام ومطاعم",   nameEn: "Food",       amount: 42, color: "#C6930A", pct: 17 },
-    { name: "مواصلات",        nameEn: "Transport",  amount: 36, color: "#7B1FA2", pct: 15 },
-    { name: "اتصالات",        nameEn: "Comms",      amount: 28, color: "#0D47A1", pct: 11 },
-    { name: "أخرى",           nameEn: "Other",      amount: 43, color: "#9C9C95", pct: 17 },
+    { name: "برمجيات وأدوات", nameEn: "Software",  amount: 98, color: "#11100E", pct: 40 },
+    { name: "طعام ومطاعم",   nameEn: "Food",       amount: 42, color: "#9C7614", pct: 17 },
+    { name: "مواصلات",        nameEn: "Transport",  amount: 36, color: "#C8BCA9", pct: 15 },
+    { name: "اتصالات",        nameEn: "Comms",      amount: 28, color: "#6D675E", pct: 11 },
+    { name: "أخرى",           nameEn: "Other",      amount: 43, color: "#DDD6CA", pct: 17 },
   ],
 
   zakat: {
@@ -89,7 +89,7 @@ export type Invoice = typeof MASRAF_DATA.invoices[0];
 export type Client  = typeof MASRAF_DATA.clients[0];
 
 // voice commands list
-(MASRAF_DATA as any).voiceCommands = [
+export const VOICE_COMMANDS = [
   "كم رصيدي؟",
   "أرسل فاتورة لشركة النجوم بمبلغ ٥٠٠ دولار",
   "ذكّر شركة النجوم بفاتورتها المتأخرة",

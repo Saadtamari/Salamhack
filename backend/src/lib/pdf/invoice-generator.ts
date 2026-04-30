@@ -20,7 +20,7 @@ export async function generateInvoicePdfBuffer({ invoice, items }: InvoicePdfInp
     document.on("end", () => resolve(Buffer.concat(chunks)));
     document.on("error", reject);
 
-    document.fontSize(22).fillColor("#0f172a").text("Masraf Invoice / فاتورة", { align: "center" });
+    document.fontSize(22).fillColor("#0f172a").text("Masraf Invoice", { align: "center" });
     document.moveDown(1.2);
 
     addTextLine(document, "Invoice Number: ", invoice.invoiceNumber, 120);

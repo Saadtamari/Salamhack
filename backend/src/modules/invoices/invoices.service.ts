@@ -150,25 +150,35 @@ export class InvoicesService {
     });
 
     const path = buildStoragePath(`invoices/${id}`, `${invoice.invoiceNumber}.pdf`);
-    const uploaded = await uploadToStorage({
-      bucket: "invoices",
-      path,
-      body: pdfBuffer,
-      contentType: "application/pdf",
-      upsert: true,
-    });
+    try {
+      const uploaded = await uploadToStorage({
+        path,
+        body: pdfBuffer,
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
-    const pdfUrl = getStoragePublicUrl(uploaded.bucket, uploaded.path);
+      const pdfUrl = getStoragePublicUrl(uploaded.bucket, uploaded.path);
 
-    await this.repository.update(id, {
-      pdfPath: uploaded.path,
-      pdfUrl,
-    });
+      await this.repository.update(id, {
+        pdfPath: uploaded.path,
+        pdfUrl,
+      });
 
-    return {
-      pdfPath: uploaded.path,
-      pdfUrl,
-    };
+      return {
+        pdfPath: uploaded.path,
+        pdfUrl,
+        stored: true,
+      };
+    } catch (error) {
+      return {
+        pdfPath: null,
+        pdfUrl: null,
+        stored: false,
+        pdfDataUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+        storageError: error instanceof Error ? error.message : "Failed to upload invoice PDF",
+      };
+    }
   }
 
   private normalizeItems(items?: InvoiceItemPayload[]): NewInvoiceItemRow[] {

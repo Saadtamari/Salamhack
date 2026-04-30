@@ -1,5 +1,5 @@
 import { AppError } from "../../shared/errors/app-error.js";
-import { buildStoragePath, createStorageSignedUrl, removeFromStorage, uploadToStorage } from "../../infrastructure/storage/supabase-storage.js";
+import { buildStoragePath, createStorageSignedUrl, getSupabaseStorageBucketName, removeFromStorage, uploadToStorage } from "../../infrastructure/storage/supabase-storage.js";
 import type { ContractFlagRow, ContractRow, NewContractFlagRow, NewContractRow } from "../../infrastructure/database/schema.js";
 import type { ContractsRepository, ListContractsOptions } from "./contracts.repository.js";
 
@@ -65,27 +65,59 @@ export class ContractsService {
     title?: string;
     titleAr?: string | null;
   }) {
+    console.log("[contracts] createFromUpload start", {
+      clientId: input.clientId ?? null,
+      fileName: input.file.originalname,
+      mimeType: input.file.mimetype,
+      size: input.file.size,
+    });
     const title = normalizeText(input.title) ?? this.buildTitleFromFilename(input.file.originalname);
     const titleAr = normalizeText(input.titleAr);
     const analysis = this.analyzeContract(title, input.file.originalname);
     const path = buildStoragePath("contracts/originals", input.file.originalname);
-
-    const uploaded = await uploadToStorage({
-      bucket: "contracts",
+    console.log("[contracts] prepared contract analysis and storage path", {
+      title,
+      titleAr: titleAr ?? null,
       path,
-      body: input.file.buffer,
-      contentType: input.file.mimetype,
-      upsert: false,
+      analysisStatus: analysis.riskLevel,
+      flagsCount: analysis.flags.length,
     });
+    let filePath = path;
+    let fileUrl: string | null = null;
+    let storageError: string | undefined;
 
-    const fileUrl = await createStorageSignedUrl(uploaded.bucket, uploaded.path);
+    try {
+      console.log("[contracts] uploading file to storage", { path, mimeType: input.file.mimetype });
+      const uploaded = await uploadToStorage({
+        path,
+        body: input.file.buffer,
+        contentType: input.file.mimetype,
+        upsert: false,
+      });
 
+      console.log("[contracts] storage upload succeeded", {
+        bucket: uploaded.bucket,
+        path: uploaded.path,
+      });
+      filePath = uploaded.path;
+      console.log("[contracts] creating signed url", { bucket: uploaded.bucket, path: uploaded.path });
+      fileUrl = await createStorageSignedUrl(uploaded.bucket, uploaded.path);
+    } catch (error) {
+      console.error("Failed to store contract file in Supabase:", error instanceof Error ? error.message : error);
+      storageError = error instanceof Error ? error.message : "Failed to store contract file";
+    }
+
+    console.log("[contracts] creating database record", {
+      filePath,
+      hasFileUrl: Boolean(fileUrl),
+      storageFallback: Boolean(storageError),
+    });
     const contract = await this.repository.create(
       {
         clientId: input.clientId ?? null,
         title,
         titleAr,
-        filePath: uploaded.path,
+        filePath,
         fileUrl,
         fileSize: input.file.size,
         originalFilename: input.file.originalname,
@@ -112,7 +144,17 @@ export class ContractsService {
       })),
     );
 
-    return contract;
+    console.log("[contracts] database record created", {
+      contractId: contract.id,
+      filePath: contract.filePath,
+      fileUrl: contract.fileUrl,
+    });
+
+    return {
+      ...contract,
+      storageStatus: storageError ? "fallback" : "stored",
+      storageError,
+    };
   }
 
   async delete(id: string) {
@@ -123,7 +165,11 @@ export class ContractsService {
     }
 
     if (contract.filePath) {
-      await removeFromStorage("contracts", contract.filePath);
+      try {
+        await removeFromStorage(getSupabaseStorageBucketName(), contract.filePath);
+      } catch {
+        // Ignore storage cleanup errors so contract deletion still succeeds.
+      }
     }
 
     return contract;

@@ -7,11 +7,12 @@ import { swaggerSpec } from "./config/swagger.js";
 import { errorHandler } from "./shared/http/error-handler.js";
 import { notFoundHandler } from "./shared/http/not-found.js";
 import { healthRouter } from "./modules/health/health.routes.js";
-import  storageRouter  from "./modules/storage/storage.routes.js";
+import storageRouter from "./modules/storage/storage.routes.js";
 import { clientsRouter } from "./modules/clients/clients.routes.js";
 import { transactionsRouter } from "./modules/transactions/transactions.routes.js";
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
 import { contractsRouter } from "./modules/contracts/contracts.routes.js";
+import { zakatRouter } from "./modules/zakat/zakat.routes.js";
 
 export function createApp() {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp() {
   app.use("/api/invoices", invoicesRouter);
   app.use("/api/contracts", contractsRouter);
   app.use("/api/transactions", transactionsRouter);
+  app.use("/api/zakat", zakatRouter);
   app.use("/api/storage", storageRouter);
   app.use("/storage", storageRouter);
 

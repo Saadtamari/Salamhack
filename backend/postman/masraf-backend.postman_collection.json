@@ -1,0 +1,325 @@
+{
+  "info": {
+    "_postman_id": "c9e08f22-3e7c-4c19-9d0a-7d3c8f6f6b10",
+    "name": "Masraf Backend API",
+    "description": "Postman collection for the mounted Masraf backend modules: Health, Clients, Invoices, Contracts, Transactions, Storage, and Zakat.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        {
+          "name": "List Clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+              "url": "{{baseUrl}}/api/clients?risk_level=&sort=created_at"
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ahmed Khalid\",\n  \"nameAr\": \"أحمد خالد\",\n  \"email\": \"ahmed@example.com\",\n  \"phone\": \"+962790000000\",\n  \"company\": \"Khalid Studio\",\n  \"companyAr\": \"ستوديو خالد\",\n  \"notes\": \"Top client\",\n  \"riskLevel\": \"low\",\n  \"riskScore\": 4.2,\n  \"totalInvoiced\": 1200,\n  \"totalPaid\": 900,\n  \"totalOverdue\": 300,\n  \"avgPaymentDays\": 18,\n  \"invoicesCount\": 5,\n  \"latePaymentsCount\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/clients"
+          }
+        },
+        {
+          "name": "Get Client By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clients/{{clientId}}"
+          }
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Preferred client\",\n  \"riskLevel\": \"medium\",\n  \"riskScore\": 5.8,\n  \"latePaymentsCount\": 2\n}"
+            },
+            "url": "{{baseUrl}}/api/clients/{{clientId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [],
+              "url": "{{baseUrl}}/api/invoices?status=&client_id=&sort=created_at"
+          }
+        },
+        {
+          "name": "Create Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"invoiceNumber\": \"INV-2026-001\",\n  \"title\": \"Brand identity design\",\n  \"titleAr\": \"تصميم الهوية البصرية\",\n  \"subtotal\": 500,\n  \"vatAmount\": 80,\n  \"total\": 580,\n  \"currency\": \"USD\",\n  \"paymentTerms\": \"net_30\",\n  \"issueDate\": \"2026-04-30\",\n  \"dueDate\": \"2026-05-30\",\n  \"status\": \"draft\",\n  \"murabahaTerms\": \"Profit-sharing terms\",\n  \"profitRate\": 12,\n  \"generatedByVoice\": false,\n  \"chaserSent\": false,\n  \"chaserMessage\": \"\",\n  \"items\": [\n    {\n      \"description\": \"Design concept\",\n      \"descriptionAr\": \"مفهوم التصميم\",\n      \"quantity\": 1,\n      \"unitPrice\": 300,\n      \"total\": 300,\n      \"sortOrder\": 0\n    },\n    {\n      \"description\": \"Revisions\",\n      \"descriptionAr\": \"التعديلات\",\n      \"quantity\": 1,\n      \"unitPrice\": 200,\n      \"total\": 200,\n      \"sortOrder\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/invoices"
+          }
+        },
+        {
+          "name": "Get Invoice By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/invoices/{{invoiceId}}"
+          }
+        },
+        {
+          "name": "Update Invoice",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"sent\",\n  \"chaserSent\": true,\n  \"chaserMessage\": \"Kind reminder to review the invoice.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/invoices/{{invoiceId}}"
+          }
+        },
+        {
+          "name": "Cancel Invoice",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/invoices/{{invoiceId}}"
+          }
+        },
+        {
+          "name": "Generate Invoice PDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"{{invoiceId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/invoices/pdf"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contracts",
+      "item": [
+        {
+          "name": "List Contracts",
+          "request": {
+            "method": "GET",
+            "header": [],
+              "url": "{{baseUrl}}/api/contracts?analysis_status=&client_id="
+          }
+        },
+        {
+          "name": "Upload And Analyze Contract",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file" },
+                { "key": "clientId", "type": "text", "value": "{{clientId}}" },
+                { "key": "title", "type": "text", "value": "Freelance agreement" },
+                { "key": "titleAr", "type": "text", "value": "اتفاقية عمل حر" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/contracts"
+          }
+        },
+        {
+          "name": "Get Contract By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/contracts/{{contractId}}"
+          }
+        },
+        {
+          "name": "Delete Contract",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/contracts/{{contractId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+              "url": "{{baseUrl}}/api/transactions?category=&from=&to="
+          }
+        },
+        {
+          "name": "Create Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"income\",\n  \"amount\": 2500,\n  \"currency\": \"USD\",\n  \"category\": \"software_tools\",\n  \"description\": \"Payment from client\",\n  \"descriptionAr\": \"دفعة من العميل\",\n  \"merchantName\": \"Client Transfer\",\n  \"reference\": \"BANK-REF-1001\",\n  \"transactionDate\": \"2026-04-30\",\n  \"isHalal\": true,\n  \"needsPurification\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/transactions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Storage",
+      "item": [
+        {
+          "name": "Upload File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file" },
+                { "key": "directory", "type": "text", "value": "uploads" },
+                { "key": "bucket", "type": "text", "value": "contracts" },
+                { "key": "access", "type": "text", "value": "signed" },
+                { "key": "upsert", "type": "text", "value": "false" },
+                { "key": "expiresInSeconds", "type": "text", "value": "900" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/storage/upload"
+          }
+        },
+        {
+          "name": "Create Signed URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"contracts\",\n  \"path\": \"{{storagePath}}\",\n  \"expiresInSeconds\": 900\n}"
+            },
+            "url": "{{baseUrl}}/api/storage/signed-url"
+          }
+        },
+        {
+          "name": "Delete File",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"contracts\",\n  \"path\": \"{{storagePath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/storage/object"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Zakat",
+      "item": [
+        {
+          "name": "List Zakat Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+              "url": "{{baseUrl}}/api/zakat?from=&to="
+          }
+        },
+        {
+          "name": "Calculate Zakat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periodStart\": \"2026-01-01\",\n  \"periodEnd\": \"2026-04-30\",\n  \"totalIncome\": 24000,\n  \"qualifyingAssets\": 18000,\n  \"nisabThreshold\": 5200,\n  \"zakatRate\": 0.025,\n  \"currency\": \"USD\",\n  \"paid\": false,\n  \"calculationDetails\": {\n    \"source\": \"manual\",\n    \"notes\": \"Quarterly estimate\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/zakat/calculate"
+          }
+        },
+        {
+          "name": "Get Zakat By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/zakat/{{zakatId}}"
+          }
+        },
+        {
+          "name": "Update Zakat",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paid\": true,\n  \"paidAt\": \"2026-04-30T12:00:00.000Z\"\n}"
+            },
+            "url": "{{baseUrl}}/api/zakat/{{zakatId}}"
+          }
+        },
+        {
+          "name": "Delete Zakat",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/zakat/{{zakatId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

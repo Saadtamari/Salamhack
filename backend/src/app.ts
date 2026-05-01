@@ -13,6 +13,11 @@ import { transactionsRouter } from "./modules/transactions/transactions.routes.j
 import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
 import { contractsRouter } from "./modules/contracts/contracts.routes.js";
 import { zakatRouter } from "./modules/zakat/zakat.routes.js";
+import { aiRouter } from "./modules/ai/ai.routes.js";
+import { voiceRouter } from "./modules/voice/voice.routes.js";
+import { reportsRouter } from "./modules/reports/reports.routes.js";
+import { purificationRouter } from "./modules/purification/purification.routes.js";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 
 export function createApp() {
   const app = express();
@@ -39,6 +44,11 @@ export function createApp() {
   app.use("/api/contracts", contractsRouter);
   app.use("/api/transactions", transactionsRouter);
   app.use("/api/zakat", zakatRouter);
+  app.use("/api/ai", aiRouter);
+  app.use("/api/voice", voiceRouter);
+  app.use("/api/reports", reportsRouter);
+  app.use("/api/purification", purificationRouter);
+  app.use("/api/dashboard", dashboardRouter);
   app.use("/api/storage", storageRouter);
   app.use("/storage", storageRouter);
 

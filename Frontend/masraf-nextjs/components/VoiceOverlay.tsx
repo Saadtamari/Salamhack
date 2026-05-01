@@ -11,6 +11,8 @@ import {
   Mic01Icon,
 } from "@hugeicons/core-free-icons";
 import { MasrafIcon } from "./icons";
+import { apiConfig } from "@/lib/api/client";
+import { masrafApi } from "@/lib/api/masraf-api";
 
 const COMMANDS = [
   "كم رصيدي؟",
@@ -77,9 +79,10 @@ const RESULTS: VoiceResult[] = [
   },
 ];
 
-export function VoiceOverlay({ onClose, onCommand }: {
+export function VoiceOverlay({ onClose, onCommand, currentScreen }: {
   onClose: () => void;
   onCommand: (type: string, payload: string) => void;
+  currentScreen?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
@@ -87,17 +90,132 @@ export function VoiceOverlay({ onClose, onCommand }: {
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(18).fill(6));
   const [cmdIdx, setCmdIdx] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const realModeRef = useRef<boolean>(apiConfig.useBackend && typeof window !== "undefined" && typeof navigator !== "undefined" && !!navigator.mediaDevices);
 
   useEffect(() => {
-    timerRef.current = setTimeout(() => startListening(), 420);
+    if (realModeRef.current) {
+      timerRef.current = setTimeout(() => startRealRecording(), 320);
+    } else {
+      timerRef.current = setTimeout(() => startListening(), 420);
+    }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      stopRecorder();
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current = null;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function stopRecorder() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      try { recorder.stop(); } catch { /* ignore */ }
+    }
+    recorder?.stream?.getTracks().forEach((track) => track.stop());
+    recorderRef.current = null;
+  }
+
+  async function startRealRecording() {
+    setExpanded(false);
+    setErrorMsg(null);
+    setTranscript("");
+    setResult(null);
+    setPhase("listening");
+    intervalRef.current = setInterval(() => {
+      setWaveHeights(() => Array(18).fill(0).map(() => Math.random() * 22 + 5));
+    }, 90);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = pickMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        recorder.stream.getTracks().forEach((track) => track.stop());
+        if (blob.size > 0) {
+          submitAudio(blob);
+        } else {
+          setPhase("idle");
+          setErrorMsg("لم يتم تسجيل أي صوت.");
+        }
+      };
+      recorder.start();
+    } catch (error) {
+      setPhase("idle");
+      const message = error instanceof Error ? error.message : "تعذر الوصول إلى الميكروفون.";
+      setErrorMsg(message);
+      // Fallback to demo if mic fails
+      realModeRef.current = false;
+      timerRef.current = setTimeout(() => startListening(), 200);
+    }
+  }
+
+  function stopAndSubmit() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setWaveHeights(Array(18).fill(6));
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      try { recorderRef.current.stop(); } catch { /* ignore */ }
+    }
+  }
+
+  async function submitAudio(blob: Blob) {
+    setPhase("processing");
+    try {
+      const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "mp4" : "webm";
+      const file = new File([blob], `voice.${ext}`, { type: blob.type || "audio/webm" });
+      const result = await masrafApi.voice.process(file, currentScreen ? { screen: currentScreen } : undefined);
+      const transcriptText = result?.transcript || "";
+      const responseMessage = result?.response?.message || "";
+      const action = result?.response?.action;
+
+      setTranscript(transcriptText || "(لم يُسمع نص واضح)");
+      setResult({
+        message: responseMessage || "تم.",
+        section: sectionForAction(action),
+        page: pageForAction(action),
+        changes: result?.response?.suggestions?.length ? result.response.suggestions : ["نُفذ الإجراء حسب طلبك"],
+      });
+      setPhase("responding");
+
+      // Play TTS audio if available
+      if (result?.audio?.base64) {
+        try {
+          const audio = new Audio(`data:${result.audio.contentType};base64,${result.audio.base64}`);
+          audioElRef.current = audio;
+          audio.play().catch(() => { /* autoplay blocked */ });
+        } catch {
+          // ignore
+        }
+      }
+
+      // Auto-execute navigate action after a brief delay so user sees confirmation
+      if (action?.type === "navigate" && action.screen) {
+        timerRef.current = setTimeout(() => {
+          onCommand("navigate", String(action.screen));
+        }, 1400);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر معالجة الطلب.";
+      setErrorMsg(message);
+      setPhase("idle");
+    }
+  }
 
   function startListening(index = cmdIdx) {
     setExpanded(false);
@@ -130,16 +248,21 @@ export function VoiceOverlay({ onClose, onCommand }: {
   function tryNext() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (timerRef.current) clearTimeout(timerRef.current);
-    const next = (cmdIdx + 1) % COMMANDS.length;
-    setCmdIdx(next);
     setTranscript("");
     setResult(null);
     setExpanded(false);
+    setErrorMsg(null);
     setPhase("idle");
+    if (realModeRef.current) {
+      timerRef.current = setTimeout(() => startRealRecording(), 200);
+      return;
+    }
+    const next = (cmdIdx + 1) % COMMANDS.length;
+    setCmdIdx(next);
     timerRef.current = setTimeout(() => startListening(next), 260);
   }
 
-  const status = phase === "listening" ? "أستمع..." : phase === "processing" ? "أراجع الطلب..." : phase === "responding" ? "تم التنفيذ" : "مصرف";
+  const status = phase === "listening" ? (realModeRef.current ? "أستمع... اضغط للإرسال" : "أستمع...") : phase === "processing" ? "أراجع الطلب..." : phase === "responding" ? "تم التنفيذ" : "مصرف";
   const accent = phase === "responding" ? "#147A41" : phase === "processing" ? "#9C7614" : "#F0C542";
 
   return (
@@ -149,9 +272,12 @@ export function VoiceOverlay({ onClose, onCommand }: {
           <div style={{ padding: expanded ? "16px 16px 12px" : "13px 14px", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ position: "relative", width: 54, height: 54, flexShrink: 0 }}>
               <div style={{ position: "absolute", inset: -5, borderRadius: "50%", background: `radial-gradient(circle, ${accent}55 0%, transparent 66%)`, filter: "blur(2px)", animation: phase === "listening" ? "voicePulse 1.6s ease-in-out infinite" : "none" }} />
-              <div style={{ position: "relative", width: 54, height: 54, borderRadius: "50%", background: "#11100E", color: "#FFFDF8", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 5px ${accent}22` }}>
+              <button
+                onClick={realModeRef.current && phase === "listening" ? stopAndSubmit : undefined}
+                aria-label={realModeRef.current && phase === "listening" ? "إيقاف التسجيل وإرسال" : "ميكروفون"}
+                style={{ position: "relative", width: 54, height: 54, borderRadius: "50%", background: "#11100E", color: "#FFFDF8", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 5px ${accent}22`, border: "none", cursor: realModeRef.current && phase === "listening" ? "pointer" : "default", padding: 0 }}>
                 <MasrafIcon icon={phase === "responding" ? AiVoiceIcon : Mic01Icon} size={24} color="currentColor" />
-              </div>
+              </button>
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -170,8 +296,17 @@ export function VoiceOverlay({ onClose, onCommand }: {
             </div>
           </div>
 
-          {(transcript || result) && (
+          {(transcript || result || errorMsg) && (
             <div style={{ padding: "0 16px 16px" }}>
+              {errorMsg && !result && (
+                <div style={{ background: "#FFF6F4", border: "1px solid #F5C9C0", borderRadius: 16, padding: "10px 12px", marginBottom: transcript || result ? 9 : 0 }}>
+                  <div style={{ fontSize: 11, color: "#B33A20", fontWeight: 800, marginBottom: 3 }}>تعذر التنفيذ</div>
+                  <div style={{ fontSize: 13, color: "#7A2515", fontWeight: 700, lineHeight: 1.6 }}>{errorMsg}</div>
+                  <button onClick={tryNext} style={{ marginTop: 8, background: "#11100E", color: "#FFFDF8", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>
+                    حاول مرة أخرى
+                  </button>
+                </div>
+              )}
               {transcript && (
                 <div style={{ background: "#F7F4EE", border: "1px solid #E7DFD2", borderRadius: 16, padding: "10px 12px", marginBottom: result ? 9 : 0 }}>
                   <div style={{ fontSize: 11, color: "#92897C", fontWeight: 800, marginBottom: 3 }}>قلت</div>
@@ -234,4 +369,35 @@ export function VoiceOverlay({ onClose, onCommand }: {
       `}</style>
     </div>
   );
+}
+
+function pickMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function pageForAction(action?: { type?: string; screen?: string | null } | null): Page {
+  const screen = action?.screen?.toLowerCase();
+  const allowed: Page[] = ["dashboard", "invoices", "clients", "expenses", "zakat", "contracts", "reports"];
+  if (screen && (allowed as string[]).includes(screen)) return screen as Page;
+  return "dashboard";
+}
+
+function sectionForAction(action?: { type?: string; screen?: string | null } | null): string {
+  const map: Record<string, string> = {
+    dashboard: "لوحة التحكم",
+    invoices: "الفواتير",
+    clients: "العملاء",
+    expenses: "المصاريف",
+    zakat: "الزكاة",
+    contracts: "العقود",
+    reports: "التقارير",
+  };
+  const screen = action?.screen?.toLowerCase();
+  if (screen && map[screen]) return map[screen];
+  return "مصرف";
 }

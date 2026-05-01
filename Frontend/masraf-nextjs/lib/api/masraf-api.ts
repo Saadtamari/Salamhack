@@ -15,6 +15,8 @@ import type {
   ExpenseCategory,
   InvoiceStatus,
   PdfResult,
+  ReceiptScanResult,
+  VoiceProcessResult,
   ZakatCalculatePayload,
 } from "./types";
 
@@ -104,6 +106,11 @@ export const masrafApi = {
           context: { screen: "expenses", data: { currency: body.currency } },
         },
       }),
+    scanReceipt: (file: File) =>
+      apiRequest<ReceiptScanResult>("/api/ai/scan-receipt", {
+        method: "POST",
+        formData: toFormData({ image: file }),
+      }),
   },
 
   voice: {
@@ -113,9 +120,9 @@ export const masrafApi = {
         formData: toFormData({ audio: file, language }),
       }),
     process: (file: File, context?: { screen?: string; data?: Record<string, unknown> }) =>
-      apiRequest<unknown>("/api/voice/process", {
+      apiRequest<VoiceProcessResult>("/api/voice/process", {
         method: "POST",
-        formData: toFormData({ audio: file, context }),
+        formData: toFormData({ audio: file, context: context ? JSON.stringify(context) : undefined }),
       }),
     synthesize: (text: string, voice = "fatima") => apiBinary("/api/voice/synthesize", { method: "POST", body: { text, voice } }),
   },

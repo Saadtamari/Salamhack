@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { upload } from "../../shared/middlewares/upload.middleware.js";
 import { AIController } from "./ai.controller.js";
 import { AIService } from "./ai.service.js";
 
@@ -55,4 +56,23 @@ aiRouter.post("/generate-chaser", (request, response, next) => {
  */
 aiRouter.post("/analyze-contract", (request, response, next) => {
   controller.analyzeContract(request, response).catch(next);
+});
+
+/**
+ * @swagger
+ * /api/ai/scan-receipt:
+ *   post:
+ *     summary: Scan a receipt image and extract structured fields via Groq vision
+ *     tags:
+ *       - AI
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: image
+ *         type: file
+ *         required: true
+ */
+aiRouter.post("/scan-receipt", upload.single("image"), (request, response, next) => {
+  controller.scanReceipt(request, response).catch(next);
 });

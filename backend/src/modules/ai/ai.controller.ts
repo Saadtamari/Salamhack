@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { AppError } from "../../shared/errors/app-error.js";
 import type { AIService } from "./ai.service.js";
 
 const chatBodySchema = z.object({
@@ -79,6 +80,25 @@ export class AIController {
       contractText: body.contractText ?? body.contract_text!,
       title: body.title,
     });
+
+    response.json({
+      success: true,
+      data: result,
+    });
+  }
+
+  async scanReceipt(request: Request, response: Response): Promise<void> {
+    const file = request.file;
+
+    if (!file) {
+      throw new AppError("Receipt image is required", 400);
+    }
+
+    if (!file.mimetype.startsWith("image/")) {
+      throw new AppError("Receipt must be an image (jpg, png, webp)", 400);
+    }
+
+    const result = await this.service.scanReceipt(file.buffer, file.mimetype);
 
     response.json({
       success: true,

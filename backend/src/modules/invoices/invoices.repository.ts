@@ -141,4 +141,19 @@ export class InvoicesRepository {
 
     return invoice ?? null;
   }
+
+  async markChaserSent(id: string, message: string): Promise<InvoiceRow | null> {
+    const [invoice] = await db
+      .update(invoices)
+      .set({
+        chaserSent: true,
+        chaserSentAt: new Date(),
+        chaserMessage: message,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, id))
+      .returning();
+
+    return invoice ?? null;
+  }
 }

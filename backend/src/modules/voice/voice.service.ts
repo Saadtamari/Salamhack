@@ -1,7 +1,9 @@
 import { groqTranscribeAudio, groqTextToSpeech } from "../../infrastructure/ai/groq.js";
 import { db } from "../../infrastructure/database/db.js";
 import { voiceLogs, type NewVoiceLogRow } from "../../infrastructure/database/schema.js";
-import { AIService, type AIChatResponse } from "../ai/ai.service.js";
+import type { AIChatResponse } from "../ai/ai.service.js";
+import { AgentService } from "../agent/agent.service.js";
+import type { AgentContext, AgentHistoryMessage, AgentRunResult } from "../agent/agent.schemas.js";
 
 export interface TranscribeResult {
   text: string;
@@ -12,16 +14,17 @@ export interface TranscribeResult {
 export interface VoiceProcessResult {
   transcript: string;
   aiResponse: AIChatResponse;
+  agentResponse: AgentRunResult;
   audioBase64?: string;
   audioContentType?: string;
   processingTimeMs: number;
 }
 
 export class VoiceService {
-  private readonly aiService: AIService;
+  private readonly agentService: AgentService;
 
   constructor() {
-    this.aiService = new AIService();
+    this.agentService = new AgentService();
   }
 
   async transcribe(
@@ -50,39 +53,37 @@ export class VoiceService {
 
   async process(
     audioBuffer: Buffer,
-    context?: { screen?: string; data?: Record<string, unknown> },
-    options: { executeAction?: boolean } = {},
+    context?: AgentContext,
+    options: { executeAction?: boolean; history?: AgentHistoryMessage[] } = {},
   ): Promise<VoiceProcessResult> {
     const startTime = Date.now();
 
-    // Step 1: Transcribe audio to text
     const transcription = await this.transcribe(audioBuffer);
 
     if (!transcription.text || transcription.text.trim().length === 0) {
       const processingTimeMs = Date.now() - startTime;
+      const agentResponse = this.emptyAgentResponse();
+
       return {
         transcript: "",
-        aiResponse: {
-          message: "لم أتمكن من فهم الصوت. حاول مرة أخرى بوضوح.",
-          action: null,
-          suggestions: ["حاول مرة أخرى", "اكتب طلبك"],
-        },
+        aiResponse: this.toLegacyAIResponse(agentResponse),
+        agentResponse,
         processingTimeMs,
       };
     }
 
-    // Step 2: Send transcript to AI for intent classification + response
-    const aiResponse = await this.aiService.chat({
+    const agentResponse = await this.agentService.run({
       message: transcription.text,
       context,
+      history: options.history,
       executeAction: options.executeAction,
     });
+    const aiResponse = this.toLegacyAIResponse(agentResponse);
 
-    // Step 3: Try TTS on the response (best-effort)
     let audioBase64: string | undefined;
     let audioContentType: string | undefined;
     try {
-      const ttsResult = await this.synthesize(aiResponse.message);
+      const ttsResult = await this.synthesize(agentResponse.message);
       audioBase64 = ttsResult.audioBuffer.toString("base64");
       audioContentType = ttsResult.contentType;
     } catch (error) {
@@ -91,14 +92,13 @@ export class VoiceService {
 
     const processingTimeMs = Date.now() - startTime;
 
-    // Step 4: Log the voice interaction
     await this.logVoiceInteraction({
       transcript: transcription.text,
-      intent: aiResponse.action?.type ?? null,
-      actionTaken: aiResponse.action ? JSON.stringify(aiResponse.action) : null,
-      responseText: aiResponse.message,
+      intent: agentResponse.action?.tool ?? null,
+      actionTaken: agentResponse.action ? JSON.stringify(agentResponse.action) : null,
+      responseText: agentResponse.message,
       sourcePage: context?.screen ?? null,
-      navigatedTo: aiResponse.action?.type === "navigate" ? (aiResponse.action.screen ?? null) : null,
+      navigatedTo: agentResponse.actionResult?.targetScreen ?? agentResponse.plan.targetScreen ?? null,
       processingTimeMs,
       success: true,
     });
@@ -106,9 +106,50 @@ export class VoiceService {
     return {
       transcript: transcription.text,
       aiResponse,
+      agentResponse,
       audioBase64,
       audioContentType,
       processingTimeMs,
+    };
+  }
+
+  private emptyAgentResponse(): AgentRunResult {
+    return {
+      status: "needs_clarification",
+      message: "I could not understand the audio. Try again clearly.",
+      plan: {
+        response: "I could not understand the audio. Try again clearly.",
+        confidence: 0,
+        action: null,
+        missingFields: ["audio"],
+        requiresConfirmation: false,
+        suggestions: ["Try again", "Type the request"],
+      },
+      action: null,
+      suggestions: ["Try again", "Type the request"],
+    };
+  }
+
+  private toLegacyAIResponse(result: AgentRunResult): AIChatResponse {
+    return {
+      message: result.message,
+      messageEn: result.messageEn,
+      action: result.action
+        ? {
+            type: result.action.tool,
+            screen: result.actionResult?.targetScreen ?? result.plan.targetScreen,
+            data: result.action.args,
+          }
+        : null,
+      actionResult: result.actionResult
+        ? {
+            executed: result.actionResult.executed,
+            type: result.actionResult.tool,
+            data: result.actionResult.data,
+            message: result.actionResult.message,
+          }
+        : undefined,
+      suggestions: result.suggestions,
     };
   }
 

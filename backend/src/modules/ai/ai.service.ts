@@ -129,6 +129,8 @@ export class AIService {
       result = await cerebrasChatCompletion(messages, {
         temperature: 0.6,
         maxTokens: 512,
+        maxRetries: 0,
+        timeoutMs: 12_000,
       });
     } catch (error) {
       console.warn("[ai] Chaser generation failed:", error instanceof Error ? error.message : error);

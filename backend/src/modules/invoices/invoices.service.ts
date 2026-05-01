@@ -181,6 +181,16 @@ export class InvoicesService {
     }
   }
 
+  async markChaserSent(id: string, message: string) {
+    const invoice = await this.repository.markChaserSent(id, message);
+
+    if (!invoice) {
+      throw new AppError("Invoice not found", 404);
+    }
+
+    return invoice;
+  }
+
   private normalizeItems(items?: InvoiceItemPayload[]): NewInvoiceItemRow[] {
     return (items ?? []).map((item, index) => {
       const quantity = toNumber(item.quantity) ?? 1;

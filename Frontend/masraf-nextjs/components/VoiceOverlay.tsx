@@ -10,143 +10,246 @@ import {
   LinkSquare02Icon,
   Mic01Icon,
 } from "@hugeicons/core-free-icons";
+import { masrafApi } from "@/lib/api";
+import type { AgentAction, AgentHistoryMessage, AgentPage, AgentRunResult } from "@/lib/api/types";
 import { MasrafIcon } from "./icons";
 
-const COMMANDS = [
-  "كم رصيدي؟",
-  "أرسل فاتورة لشركة النجوم بمبلغ ٥٠٠ دولار",
-  "ذكّر شركة النجوم بفاتورتها المتأخرة",
-  "كم صرفت هذا الشهر؟",
-  "احسب زكاتي",
-  "خذني للفواتير",
-  "مين أسوأ عميل عندي؟",
-];
+type Phase = "idle" | "listening" | "processing" | "responding" | "error";
 
-type Page = "dashboard" | "invoices" | "clients" | "expenses" | "zakat" | "contracts" | "reports";
-type Phase = "idle" | "listening" | "processing" | "responding";
-
-type VoiceResult = {
-  message: string;
-  section: string;
-  page: Page;
-  changes: string[];
-};
-
-const RESULTS: VoiceResult[] = [
-  {
-    message: "رصيدك الحالي ١٢,٨٤٠ دولار، والدخل هذا الشهر أعلى من الشهر الماضي.",
-    section: "لوحة التحكم",
-    page: "dashboard",
-    changes: ["قراءة الرصيد من بطاقة الملخص", "مراجعة اتجاه الدخل والمصاريف", "لم يتم تعديل أي بيانات"],
-  },
-  {
-    message: "تم تجهيز فاتورة INV-2026-024 لشركة النجوم بمبلغ ٥٠٠ دولار.",
-    section: "الفواتير",
-    page: "invoices",
-    changes: ["إضافة مسودة فاتورة في قسم الفواتير", "تحديد العميل: شركة النجوم", "تعيين المبلغ: ٥٠٠ دولار"],
-  },
-  {
-    message: "تم تجهيز رسالة متابعة مختصرة للفاتورة المتأخرة.",
-    section: "الفواتير",
-    page: "invoices",
-    changes: ["فتح حالة التحصيل للفاتورة المتأخرة", "إنشاء نص تذكير مهذب", "ربط الإجراء بسجل العميل"],
-  },
-  {
-    message: "مصروفاتك هذا الشهر ٢٤٧ دولار، وأكبر بند هو البرمجيات والأدوات.",
-    section: "المصاريف",
-    page: "expenses",
-    changes: ["قراءة إجمالي مصاريف الشهر", "ترتيب البنود حسب الأعلى تكلفة", "لم يتم تعديل أي بيانات"],
-  },
-  {
-    message: "زكاتك المستحقة ٣٢١ دولار بناءً على الوعاء الزكوي الحالي.",
-    section: "الزكاة",
-    page: "zakat",
-    changes: ["احتساب الوعاء الزكوي", "تطبيق نسبة ٢.٥٪", "إظهار المبلغ المستحق في قسم الزكاة"],
-  },
-  {
-    message: "جاهز. افتح قسم الفواتير من زر التفاصيل.",
-    section: "الفواتير",
-    page: "invoices",
-    changes: ["تحديد الوجهة المطلوبة", "تجهيز انتقال مباشر إلى قسم الفواتير", "لم يتم تنفيذ الانتقال إلا عند الضغط"],
-  },
-  {
-    message: "شركة النجوم هي الأعلى خطورة بسبب مبلغ متأخر وعدد أيام التأخير.",
-    section: "العملاء",
-    page: "clients",
-    changes: ["مراجعة درجات المخاطر", "تحديد العميل الأعلى خطورة", "عرض سبب التصنيف"],
-  },
-];
-
-export function VoiceOverlay({ onClose, onCommand }: {
+export function VoiceOverlay({
+  onClose,
+  onCommand,
+  currentScreen,
+  sessionData,
+}: {
   onClose: () => void;
   onCommand: (type: string, payload: string) => void;
+  currentScreen?: string;
+  sessionData?: Record<string, unknown>;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
-  const [result, setResult] = useState<VoiceResult | null>(null);
+  const [message, setMessage] = useState("Ready");
+  const [result, setResult] = useState<AgentRunResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(18).fill(6));
-  const [cmdIdx, setCmdIdx] = useState(0);
-  const [expanded, setExpanded] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const conversationIdRef = useRef(`voice-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const historyRef = useRef<AgentHistoryMessage[]>([]);
 
   useEffect(() => {
-    timerRef.current = setTimeout(() => startListening(), 420);
+    const timer = window.setTimeout(() => {
+      void startRecording();
+    }, 180);
+
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      window.clearTimeout(timer);
+      cleanupRecorder();
+      audioRef.current?.pause();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function startListening(index = cmdIdx) {
-    setExpanded(false);
-    setPhase("listening");
-    intervalRef.current = setInterval(() => {
-      setWaveHeights(() => Array(18).fill(0).map(() => Math.random() * 22 + 5));
+  useEffect(() => {
+    if (phase !== "listening") {
+      setWaveHeights(Array(18).fill(6));
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setWaveHeights(Array(18).fill(0).map(() => Math.random() * 22 + 5));
     }, 90);
 
-    const cmd = COMMANDS[index];
-    let i = 0;
-    const typeInterval = setInterval(() => {
-      setTranscript(cmd.slice(0, ++i));
-      if (i >= cmd.length) {
-        clearInterval(typeInterval);
-        timerRef.current = setTimeout(() => startProcessing(index), 650);
-      }
-    }, 52);
-  }
+    return () => window.clearInterval(interval);
+  }, [phase]);
 
-  function startProcessing(index = cmdIdx) {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setWaveHeights(Array(18).fill(6));
-    setPhase("processing");
-    timerRef.current = setTimeout(() => {
-      setResult(RESULTS[index]);
-      setPhase("responding");
-    }, 1100);
-  }
-
-  function tryNext() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const next = (cmdIdx + 1) % COMMANDS.length;
-    setCmdIdx(next);
+  async function startRecording() {
+    setError(null);
     setTranscript("");
     setResult(null);
-    setExpanded(false);
-    setPhase("idle");
-    timerRef.current = setTimeout(() => startListening(next), 260);
+    setMessage("Listening...");
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setPhase("error");
+      setError("Voice recording is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      streamRef.current = stream;
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        void submitRecording();
+      };
+
+      recorder.start();
+      setPhase("listening");
+    } catch (caught) {
+      setPhase("error");
+      setError(caught instanceof Error ? caught.message : "Microphone permission was denied.");
+    }
   }
 
-  const status = phase === "listening" ? "أستمع..." : phase === "processing" ? "أراجع الطلب..." : phase === "responding" ? "تم التنفيذ" : "مصرف";
+  function stopRecording() {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return;
+    }
+
+    setPhase("processing");
+    setMessage("Processing...");
+    recorder.stop();
+  }
+
+  async function submitRecording() {
+    const chunks = chunksRef.current;
+    cleanupRecorder();
+
+    if (chunks.length === 0) {
+      setPhase("error");
+      setError("No audio was captured.");
+      return;
+    }
+
+    try {
+      const type = chunks[0]?.type || "audio/webm";
+      const blob = new Blob(chunks, { type });
+      const file = new File([blob], `masraf-command-${Date.now()}.webm`, { type });
+      const response = await masrafApi.voice.process(file, agentContext(), true, historyRef.current);
+      const agent = response.agentResponse;
+
+      setTranscript(response.transcript || "");
+      setResult(agent ?? null);
+      setMessage(agent?.message ?? response.aiResponse?.message ?? "Done.");
+      setPhase("responding");
+      playTts(response.audioBase64, response.audioContentType);
+
+      if (agent) {
+        rememberTurn(response.transcript || "", agent.message);
+        applyCommandSideEffects(agent, false);
+      }
+    } catch (caught) {
+      setPhase("error");
+      setError(caught instanceof Error ? caught.message : "Voice command failed.");
+    }
+  }
+
+  async function confirmAction(approved: boolean) {
+    const action = result?.action;
+    if (!action) {
+      return;
+    }
+
+    setPhase("processing");
+    setMessage(approved ? "Confirming..." : "Cancelling...");
+
+    try {
+      const confirmed = await masrafApi.agent.command({
+        context: agentContext(),
+        executeAction: true,
+        confirmation: {
+          approved,
+          action,
+          idempotencyKey: `${Date.now()}-${action.tool}`,
+        },
+      });
+
+      setResult(confirmed);
+      setMessage(confirmed.message);
+      setPhase("responding");
+      applyCommandSideEffects(confirmed, approved);
+    } catch (caught) {
+      setPhase("error");
+      setError(caught instanceof Error ? caught.message : "Could not confirm the action.");
+    }
+  }
+
+  function applyCommandSideEffects(agent: AgentRunResult, confirmed: boolean) {
+    const target = agent.actionResult?.targetScreen ?? agent.plan.targetScreen;
+
+    if (agent.status === "executed") {
+      onCommand("refresh", "");
+    }
+
+    if (agent.action?.tool === "ui.navigate" && target) {
+      onCommand("navigate", target);
+      onClose();
+      return;
+    }
+
+    if (confirmed && agent.status === "executed" && target) {
+      onCommand("navigate", target);
+      onClose();
+    }
+  }
+
+  function agentContext() {
+    return {
+      screen: currentScreen,
+      conversationId: conversationIdRef.current,
+      data: sessionData,
+    };
+  }
+
+  function rememberTurn(userMessage: string, assistantMessage: string) {
+    const next = [...historyRef.current];
+    if (userMessage.trim()) {
+      next.push({ role: "user", content: userMessage.trim() });
+    }
+    if (assistantMessage.trim()) {
+      next.push({ role: "assistant", content: assistantMessage.trim() });
+    }
+    historyRef.current = next.slice(-12);
+  }
+
+  function cleanupRecorder() {
+    recorderRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  function playTts(base64?: string, contentType?: string) {
+    if (!base64) {
+      return;
+    }
+
+    audioRef.current?.pause();
+    const audio = new Audio(`data:${contentType || "audio/wav"};base64,${base64}`);
+    audioRef.current = audio;
+    void audio.play().catch(() => undefined);
+  }
+
+  const pendingAction = result?.status === "needs_confirmation" ? result.action : null;
+  const targetScreen = result?.actionResult?.targetScreen ?? result?.plan.targetScreen;
+  const status = phase === "listening"
+    ? "Listening"
+    : phase === "processing"
+      ? "Working"
+      : phase === "error"
+        ? "Needs attention"
+        : result?.status === "needs_confirmation"
+          ? "Confirm action"
+          : "Masraf agent";
   const accent = phase === "responding" ? "#147A41" : phase === "processing" ? "#9C7614" : "#F0C542";
 
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 220, pointerEvents: "none", fontFamily: "var(--font-ar)", direction: "rtl" }}>
-      <div style={{ position: "absolute", left: "50%", bottom: expanded ? 26 : 82, transform: "translateX(-50%)", width: "min(352px, calc(100% - 28px))", pointerEvents: "auto" }}>
-        <div style={{ background: "rgba(255,253,248,0.96)", border: "1px solid #DDD6CA", borderRadius: expanded ? 22 : 28, boxShadow: "0 22px 70px rgba(17,16,14,0.22)", backdropFilter: "blur(22px)", overflow: "hidden" }}>
-          <div style={{ padding: expanded ? "16px 16px 12px" : "13px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", width: "min(386px, calc(100% - 28px))", pointerEvents: "auto" }}>
+        <div style={{ background: "rgba(255,253,248,0.97)", border: "1px solid #DDD6CA", borderRadius: 22, boxShadow: "0 22px 70px rgba(17,16,14,0.22)", backdropFilter: "blur(22px)", overflow: "hidden" }}>
+          <div style={{ padding: "16px", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ position: "relative", width: 54, height: 54, flexShrink: 0 }}>
               <div style={{ position: "absolute", inset: -5, borderRadius: "50%", background: `radial-gradient(circle, ${accent}55 0%, transparent 66%)`, filter: "blur(2px)", animation: phase === "listening" ? "voicePulse 1.6s ease-in-out infinite" : "none" }} />
               <div style={{ position: "relative", width: 54, height: 54, borderRadius: "50%", background: "#11100E", color: "#FFFDF8", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 5px ${accent}22` }}>
@@ -156,73 +259,64 @@ export function VoiceOverlay({ onClose, onCommand }: {
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 7 }}>
-                <div style={{ fontSize: 12, color: "#6D675E", fontWeight: 800 }}>{status}</div>
-                <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 10, border: "1px solid #DDD6CA", background: "#F7F4EE", color: "#11100E", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 12, color: "#6D675E", fontWeight: 850 }}>{status}</div>
+                <button onClick={onClose} style={iconButtonStyle}>
                   <MasrafIcon icon={Cancel01Icon} size={15} color="currentColor" strokeWidth={2} />
                 </button>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 3, height: 28 }}>
-                {waveHeights.map((h, i) => (
-                  <div key={i} style={{ width: 3, height: phase === "listening" ? h : 6, background: phase === "idle" ? "#DDD6CA" : "#11100E", opacity: phase === "processing" ? 0.45 : 0.85, borderRadius: 4, transition: "height 0.08s ease" }} />
+                {waveHeights.map((height, index) => (
+                  <div key={index} style={{ width: 3, height, background: phase === "idle" ? "#DDD6CA" : "#11100E", opacity: phase === "processing" ? 0.45 : 0.85, borderRadius: 4, transition: "height 0.08s ease" }} />
                 ))}
               </div>
             </div>
           </div>
 
-          {(transcript || result) && (
-            <div style={{ padding: "0 16px 16px" }}>
-              {transcript && (
-                <div style={{ background: "#F7F4EE", border: "1px solid #E7DFD2", borderRadius: 16, padding: "10px 12px", marginBottom: result ? 9 : 0 }}>
-                  <div style={{ fontSize: 11, color: "#92897C", fontWeight: 800, marginBottom: 3 }}>قلت</div>
-                  <div style={{ fontSize: 15, color: "#11100E", fontWeight: 800, lineHeight: 1.55 }}>{transcript}</div>
-                </div>
-              )}
+          <div style={{ padding: "0 16px 16px", display: "grid", gap: 9 }}>
+            {transcript && (
+              <div style={panelStyle}>
+                <div style={labelStyle}>Transcript</div>
+                <div style={{ fontSize: 14, color: "#11100E", fontWeight: 800, lineHeight: 1.55, overflowWrap: "anywhere" }}>{transcript}</div>
+              </div>
+            )}
 
-              {result && (
-                <div style={{ background: "#FFFDF8", border: "1px solid #DDD6CA", borderRadius: 16, padding: "11px 12px" }}>
-                  <div style={{ fontSize: 14, color: "#11100E", lineHeight: 1.7, fontWeight: 750 }}>{result.message}</div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button onClick={() => setExpanded((v) => !v)} style={{ flex: 1, background: "#11100E", color: "#FFFDF8", border: "none", borderRadius: 11, padding: "10px 12px", fontSize: 13, fontWeight: 850, cursor: "pointer", fontFamily: "var(--font-ar)" }}>
-                      {expanded ? "إخفاء التفاصيل" : "تفاصيل الأمر"}
-                    </button>
-                    <button onClick={tryNext} style={{ background: "#F1EDE5", color: "#11100E", border: "1px solid #DDD6CA", borderRadius: 11, padding: "10px 12px", fontSize: 13, fontWeight: 850, cursor: "pointer", fontFamily: "var(--font-ar)" }}>
-                      أمر آخر
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {expanded && result && (
-            <div style={{ borderTop: "1px solid #DDD6CA", padding: "14px 16px 16px", background: "#F7F4EE" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 12, color: "#92897C", fontWeight: 800 }}>سيظهر في</div>
-                  <div style={{ fontSize: 16, color: "#11100E", fontWeight: 900 }}>{result.section}</div>
-                </div>
-                <div style={{ width: 42, height: 42, borderRadius: 14, background: "#11100E", color: "#F0C542", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <MasrafIcon icon={result.page === "invoices" ? Invoice03Icon : DashboardSquare01Icon} size={21} color="currentColor" />
+            {(message || error) && (
+              <div style={{ ...panelStyle, background: phase === "error" ? "#FFF3F0" : "#FFFDF8" }}>
+                <div style={labelStyle}>{phase === "error" ? "Error" : "Response"}</div>
+                <div style={{ fontSize: 15, color: phase === "error" ? "#B3261E" : "#11100E", lineHeight: 1.65, fontWeight: 800, overflowWrap: "anywhere" }}>
+                  {error || message}
                 </div>
               </div>
+            )}
 
-              <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-                {result.changes.map((change) => (
-                  <div key={change} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#2C2924", fontWeight: 700 }}>
-                    <MasrafIcon icon={CheckmarkCircle02Icon} size={16} color="#147A41" strokeWidth={2} />
-                    <span>{change}</span>
-                  </div>
-                ))}
-              </div>
+            {pendingAction && <ActionSummary action={pendingAction} targetScreen={targetScreen} />}
 
-              <button onClick={() => onCommand("navigate", result.page)} style={{ width: "100%", background: "#FFFDF8", color: "#11100E", border: "1px solid #DDD6CA", borderRadius: 12, padding: "11px 12px", fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-ar)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <MasrafIcon icon={LinkSquare02Icon} size={18} color="currentColor" />
-                افتح قسم {result.section}
-                <MasrafIcon icon={ArrowRight01Icon} size={16} color="currentColor" />
-              </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              {phase === "listening" && (
+                <button onClick={stopRecording} style={{ ...primaryButtonStyle, flex: 1 }}>
+                  Stop and send
+                </button>
+              )}
+
+              {(phase === "idle" || phase === "error" || phase === "responding") && !pendingAction && (
+                <button onClick={() => void startRecording()} style={{ ...primaryButtonStyle, flex: 1 }}>
+                  Record again
+                </button>
+              )}
+
+              {pendingAction && (
+                <>
+                  <button onClick={() => void confirmAction(true)} style={{ ...primaryButtonStyle, flex: 1 }}>
+                    Confirm
+                  </button>
+                  <button onClick={() => void confirmAction(false)} style={secondaryButtonStyle}>
+                    Cancel
+                  </button>
+                </>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -235,3 +329,102 @@ export function VoiceOverlay({ onClose, onCommand }: {
     </div>
   );
 }
+
+function ActionSummary({ action, targetScreen }: { action: AgentAction; targetScreen?: AgentPage }) {
+  return (
+    <div style={{ background: "#F7F4EE", border: "1px solid #E7DFD2", borderRadius: 16, padding: "11px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={labelStyle}>Action</div>
+          <div style={{ fontSize: 14, color: "#11100E", fontWeight: 900 }}>{actionLabel(action.tool)}</div>
+        </div>
+        <div style={{ width: 38, height: 38, borderRadius: 13, background: "#11100E", color: "#F0C542", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <MasrafIcon icon={targetScreen === "invoices" ? Invoice03Icon : DashboardSquare01Icon} size={19} color="currentColor" />
+        </div>
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {Object.entries(action.args).slice(0, 5).map(([key, value]) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#2C2924", fontWeight: 700, minWidth: 0 }}>
+            <MasrafIcon icon={CheckmarkCircle02Icon} size={15} color="#147A41" strokeWidth={2} />
+            <span style={{ color: "#6D675E", flexShrink: 0 }}>{key}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{String(value)}</span>
+          </div>
+        ))}
+      </div>
+      {targetScreen && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#6D675E", fontSize: 12, fontWeight: 800, marginTop: 9 }}>
+          <MasrafIcon icon={LinkSquare02Icon} size={15} color="currentColor" />
+          Opens {targetScreen}
+          <MasrafIcon icon={ArrowRight01Icon} size={14} color="currentColor" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function actionLabel(tool: string) {
+  switch (tool) {
+    case "transactions.create": return "Record transaction";
+    case "transactions.list": return "Review transactions";
+    case "clients.create": return "Create client";
+    case "clients.find": return "Find client";
+    case "invoices.create_draft": return "Create invoice draft";
+    case "invoices.send": return "Send invoice";
+    case "invoices.send_reminder": return "Send payment reminder";
+    case "zakat.calculate": return "Calculate zakat";
+    case "reports.generate": return "Generate report";
+    case "ui.navigate": return "Navigate";
+    default: return tool;
+  }
+}
+
+const iconButtonStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 10,
+  border: "1px solid #DDD6CA",
+  background: "#F7F4EE",
+  color: "#11100E",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const panelStyle: React.CSSProperties = {
+  background: "#F7F4EE",
+  border: "1px solid #E7DFD2",
+  borderRadius: 16,
+  padding: "10px 12px",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#92897C",
+  fontWeight: 850,
+  marginBottom: 3,
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  background: "#11100E",
+  color: "#FFFDF8",
+  border: "none",
+  borderRadius: 11,
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 900,
+  cursor: "pointer",
+  fontFamily: "var(--font-ar)",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  background: "#F1EDE5",
+  color: "#11100E",
+  border: "1px solid #DDD6CA",
+  borderRadius: 11,
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 850,
+  cursor: "pointer",
+  fontFamily: "var(--font-ar)",
+};

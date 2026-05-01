@@ -10,8 +10,14 @@ const synthesizeBodySchema = z.object({
 
 const voiceContextSchema = z.object({
   screen: z.string().optional(),
+  conversationId: z.string().trim().min(1).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
 });
+
+const voiceHistorySchema = z.array(z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+}));
 
 export class VoiceController {
   constructor(private readonly service: VoiceService) {}
@@ -44,7 +50,9 @@ export class VoiceController {
     }
 
     let context: z.infer<typeof voiceContextSchema> | undefined;
+    let history: z.infer<typeof voiceHistorySchema> | undefined;
     const rawContext = request.body?.context;
+    const rawHistory = request.body?.history;
     const executeAction = request.body?.executeAction === "true" || request.body?.execute_action === "true";
 
     if (typeof rawContext === "string" && rawContext.trim().length > 0) {
@@ -57,7 +65,17 @@ export class VoiceController {
       context = voiceContextSchema.parse(rawContext);
     }
 
-    const result = await this.service.process(file.buffer, context, { executeAction });
+    if (typeof rawHistory === "string" && rawHistory.trim().length > 0) {
+      try {
+        history = voiceHistorySchema.parse(JSON.parse(rawHistory));
+      } catch {
+        // ignore invalid JSON in history
+      }
+    } else if (rawHistory && typeof rawHistory === "object") {
+      history = voiceHistorySchema.parse(rawHistory);
+    }
+
+    const result = await this.service.process(file.buffer, context, { executeAction, history });
 
     response.json({
       success: true,

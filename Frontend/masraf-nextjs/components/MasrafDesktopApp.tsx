@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { MASRAF_DATA } from "@/lib/data";
 import {
   Agreement01Icon,
@@ -19,6 +19,7 @@ import { ToastContainer } from "@/components/ToastContainer";
 import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
 import { apiConfig, useBackendHealth, useMasrafBackend } from "@/lib/api";
+import { buildAgentSessionSnapshot } from "@/lib/api/agent-context";
 import {
   DesktopDashboard, DesktopInvoices, DesktopClients,
   DesktopExpenses, DesktopZakat, DesktopContracts, DesktopReports,
@@ -173,6 +174,7 @@ export default function MasrafDesktopApp() {
   const backendHealth = useBackendHealth();
   const backend = useMasrafBackend();
   const { toasts, toast } = useToast();
+  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(backend.data), [backend.data]);
 
   useEffect(() => {
     (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY = currency;
@@ -298,10 +300,13 @@ export default function MasrafDesktopApp() {
 
       {voiceOpen && (
         <VoiceOverlay
+          currentScreen={screen}
+          sessionData={agentSessionData}
           onClose={() => setVoiceOpen(false)}
           onCommand={(type, payload) => {
             if (type === "navigate") navigate(payload);
-            setVoiceOpen(false);
+            if (type === "refresh") void backend.refetch();
+            if (type !== "refresh") setVoiceOpen(false);
           }}
         />
       )}

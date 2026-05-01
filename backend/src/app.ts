@@ -14,6 +14,7 @@ import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
 import { contractsRouter } from "./modules/contracts/contracts.routes.js";
 import { zakatRouter } from "./modules/zakat/zakat.routes.js";
 import { aiRouter } from "./modules/ai/ai.routes.js";
+import { agentRouter } from "./modules/agent/agent.routes.js";
 import { voiceRouter } from "./modules/voice/voice.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { purificationRouter } from "./modules/purification/purification.routes.js";
@@ -45,6 +46,7 @@ export function createApp() {
   app.use("/api/transactions", transactionsRouter);
   app.use("/api/zakat", zakatRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/agent", agentRouter);
   app.use("/api/voice", voiceRouter);
   app.use("/api/reports", reportsRouter);
   app.use("/api/purification", purificationRouter);

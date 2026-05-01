@@ -1,10 +1,9 @@
-import { and, desc, eq, gte, lte, sql, sum, count } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sum, count } from "drizzle-orm";
 import { db } from "../../infrastructure/database/db.js";
 import {
   reports,
   invoices,
   transactions,
-  clients,
   type ReportRow,
   type NewReportRow,
 } from "../../infrastructure/database/schema.js";
@@ -21,7 +20,7 @@ export interface AggregatedReportData {
   invoicesPaid: number;
   invoicesOverdue: number;
   topClientId: string | null;
-  topCategory: string | null;
+  topCategory: NewReportRow["topCategory"] | null;
 }
 
 export class ReportsRepository {
@@ -65,7 +64,7 @@ export class ReportsRepository {
         and(
           eq(transactions.type, "income"),
           gte(transactions.transactionDate, startDate),
-          lte(transactions.transactionDate, endDate),
+          lt(transactions.transactionDate, endDate),
         ),
       );
 
@@ -76,7 +75,7 @@ export class ReportsRepository {
         and(
           eq(transactions.type, "expense"),
           gte(transactions.transactionDate, startDate),
-          lte(transactions.transactionDate, endDate),
+          lt(transactions.transactionDate, endDate),
         ),
       );
 
@@ -87,7 +86,7 @@ export class ReportsRepository {
       .where(
         and(
           gte(invoices.issueDate, startDate),
-          lte(invoices.issueDate, endDate),
+          lt(invoices.issueDate, endDate),
         ),
       );
 
@@ -98,7 +97,7 @@ export class ReportsRepository {
         and(
           eq(invoices.status, "paid"),
           gte(invoices.issueDate, startDate),
-          lte(invoices.issueDate, endDate),
+          lt(invoices.issueDate, endDate),
         ),
       );
 
@@ -109,7 +108,7 @@ export class ReportsRepository {
         and(
           eq(invoices.status, "overdue"),
           gte(invoices.issueDate, startDate),
-          lte(invoices.issueDate, endDate),
+          lt(invoices.issueDate, endDate),
         ),
       );
 
@@ -123,7 +122,7 @@ export class ReportsRepository {
       .where(
         and(
           gte(invoices.issueDate, startDate),
-          lte(invoices.issueDate, endDate),
+          lt(invoices.issueDate, endDate),
         ),
       )
       .groupBy(invoices.clientId)
@@ -141,7 +140,7 @@ export class ReportsRepository {
         and(
           eq(transactions.type, "expense"),
           gte(transactions.transactionDate, startDate),
-          lte(transactions.transactionDate, endDate),
+          lt(transactions.transactionDate, endDate),
         ),
       )
       .groupBy(transactions.category)
@@ -159,7 +158,7 @@ export class ReportsRepository {
       invoicesPaid: invoicePaidResult[0]?.count ?? 0,
       invoicesOverdue: invoiceOverdueResult[0]?.count ?? 0,
       topClientId: topClientResult[0]?.clientId ?? null,
-      topCategory: (topCategoryResult[0]?.category as string) ?? null,
+      topCategory: topCategoryResult[0]?.category ?? null,
     };
   }
 

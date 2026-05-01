@@ -17,7 +17,7 @@ export function errorHandler(
       success: false,
       message:
         error.code === "LIMIT_FILE_SIZE"
-          ? "File is too large. Maximum allowed size is 15 MB."
+          ? "File is too large for this upload endpoint."
           : error.message,
       code: error.code,
     });

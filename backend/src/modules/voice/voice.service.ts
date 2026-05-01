@@ -51,6 +51,7 @@ export class VoiceService {
   async process(
     audioBuffer: Buffer,
     context?: { screen?: string; data?: Record<string, unknown> },
+    options: { executeAction?: boolean } = {},
   ): Promise<VoiceProcessResult> {
     const startTime = Date.now();
 
@@ -74,6 +75,7 @@ export class VoiceService {
     const aiResponse = await this.aiService.chat({
       message: transcription.text,
       context,
+      executeAction: options.executeAction,
     });
 
     // Step 3: Try TTS on the response (best-effort)
@@ -96,7 +98,7 @@ export class VoiceService {
       actionTaken: aiResponse.action ? JSON.stringify(aiResponse.action) : null,
       responseText: aiResponse.message,
       sourcePage: context?.screen ?? null,
-      navigatedTo: aiResponse.action?.type === "navigate" ? (aiResponse.action.screen as string) : null,
+      navigatedTo: aiResponse.action?.type === "navigate" ? (aiResponse.action.screen ?? null) : null,
       processingTimeMs,
       success: true,
     });

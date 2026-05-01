@@ -1,4 +1,5 @@
 import { toNumber } from "../../lib/utils/numbers.js";
+import { groqAnalyzeReceiptImage, type GroqReceiptExtraction } from "../../infrastructure/ai/groq.js";
 import type { NewTransactionRow, TransactionRow } from "../../infrastructure/database/schema.js";
 import type { TransactionsRepository } from "./transactions.repository.js";
 
@@ -22,6 +23,18 @@ export interface TransactionListQuery {
   to?: string;
 }
 
+export interface ReceiptScanOptions {
+  autoCreate?: boolean;
+  fallbackCurrency?: string;
+  fallbackDate?: string;
+}
+
+export interface ReceiptScanResult {
+  extracted: GroqReceiptExtraction;
+  suggestedTransaction: TransactionPayload | null;
+  createdTransaction?: TransactionRow;
+}
+
 export class TransactionsService {
   constructor(private readonly repository: TransactionsRepository) {}
 
@@ -31,6 +44,41 @@ export class TransactionsService {
 
   async create(payload: TransactionPayload): Promise<TransactionRow> {
     return this.repository.create(this.buildRowPayload(payload));
+  }
+
+  async scanReceipt(
+    file: Express.Multer.File,
+    options: ReceiptScanOptions = {},
+  ): Promise<ReceiptScanResult> {
+    const extracted = await groqAnalyzeReceiptImage(file.buffer, file.mimetype);
+    const transactionDate = extracted.transactionDate ?? options.fallbackDate ?? new Date().toISOString().slice(0, 10);
+    const currency = extracted.currency ?? options.fallbackCurrency ?? "USD";
+
+    const suggestedTransaction = extracted.amount && extracted.amount > 0
+      ? {
+          type: "expense" as const,
+          amount: extracted.amount,
+          currency,
+          category: extracted.category ?? "other",
+          description: extracted.description,
+          descriptionAr: extracted.descriptionAr,
+          merchantName: extracted.merchantName,
+          transactionDate,
+          isHalal: extracted.isHalal,
+          needsPurification: extracted.needsPurification,
+        }
+      : null;
+
+    const result: ReceiptScanResult = {
+      extracted,
+      suggestedTransaction,
+    };
+
+    if (options.autoCreate && suggestedTransaction) {
+      result.createdTransaction = await this.create(suggestedTransaction);
+    }
+
+    return result;
   }
 
   private buildRowPayload(payload: TransactionPayload): NewTransactionRow {

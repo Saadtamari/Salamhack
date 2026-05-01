@@ -48,31 +48,15 @@ export class ContractsController {
     const file = request.file;
 
     if (!file) {
-      console.error("[contracts] missing file in request body", {
-        bodyKeys: Object.keys(request.body ?? {}),
-      });
       throw new AppError("file is required", 400);
     }
 
     const body = contractBodySchema.parse(request.body);
-    console.log("[contracts] parsed create payload", {
-      clientId: body.clientId ?? body.client_id ?? null,
-      title: body.title ?? null,
-      titleAr: body.titleAr ?? body.title_ar ?? null,
-      fileName: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
-    });
     const contract = await this.service.createFromUpload({
       file,
       clientId: body.clientId ?? body.client_id,
       title: body.title,
       titleAr: body.titleAr ?? body.title_ar,
-    });
-
-    console.log("[contracts] create succeeded", {
-      contractId: contract.id,
-      storageStatus: (contract as { storageStatus?: string }).storageStatus ?? "unknown",
     });
 
     response.status(201).json({ success: true, data: contract });

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { upload } from "../../shared/middlewares/upload.middleware.js";
 import { TransactionsController } from "./transactions.controller.js";
 import { TransactionsRepository } from "./transactions.repository.js";
 import { TransactionsService } from "./transactions.service.js";
@@ -32,3 +33,23 @@ transactionsRouter.get("/", (request, response, next) => {
 transactionsRouter.post("/", (request, response, next) => {
   controller.create(request, response).catch(next);
 });
+
+/**
+ * @swagger
+ * /api/transactions/scan-receipt:
+ *   post:
+ *     summary: Scan a receipt image and extract expense data
+ *     tags:
+ *       - Transactions
+ */
+transactionsRouter.post(
+  "/scan-receipt",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "receipt", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+  ]),
+  (request, response, next) => {
+    controller.scanReceipt(request, response).catch(next);
+  },
+);

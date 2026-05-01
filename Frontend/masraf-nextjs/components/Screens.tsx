@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState } from "react";
 import {
   Alert02Icon,
@@ -21,7 +21,7 @@ import { InvoicePreviewModal, ChaserModal, ReceiptScanner, PurificationLedger } 
 import type { Invoice } from "@/lib/data";
 
 const D = MASRAF_DATA;
-type Page = "dashboard" | "invoices" | "clients" | "expenses" | "zakat" | "contracts" | "reports";
+type Page = "dashboard" | "invoices" | "clients" | "expenses" | "zakat" | "contracts" | "reports" | "notifications" | "settings";
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
@@ -29,6 +29,7 @@ export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
   showBalance?: boolean;
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
+  void toast;
   const overdue = D.invoices.filter((i) => i.status === "overdue");
   const quickActions: { icon: IconSvgElement; label: string; page: Page }[] = [
     { icon: Invoice03Icon, label: "فاتورة جديدة", page: "invoices" },
@@ -43,9 +44,9 @@ export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
     return Car03Icon;
   };
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
       {/* Header */}
-      <div style={{ background: "#11100E", padding: "20px 20px 32px", position: "relative", overflow: "hidden" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 32px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -137,7 +138,7 @@ export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#11100E" }}>{t.desc}</div>
                 <div style={{ fontSize: 11, color: "#92897C" }}>{t.date}</div>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: t.type === "income" ? "#11100E" : "#11100E" }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: t.type === "income" ? "#1B5E20" : "#11100E" }}>
                 {t.type === "income" ? "+" : ""}{fmt(Math.abs(t.amount))}
               </div>
             </div>
@@ -153,6 +154,7 @@ export function InvoicesScreen({ onNavigate, toast }: {
   onNavigate: (page: string) => void;
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
+  void onNavigate;
   const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [previewInv, setPreviewInv] = useState<Invoice | null>(null);
@@ -167,8 +169,8 @@ export function InvoicesScreen({ onNavigate, toast }: {
   const filtered = filter === "all" ? D.invoices : D.invoices.filter((i) => i.status === filter);
 
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 0", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 0", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>الفواتير</div>
@@ -213,7 +215,7 @@ export function InvoicesScreen({ onNavigate, toast }: {
         ))}
       </div>
 
-      <button onClick={() => setShowCreate(true)} style={{ position: "fixed", bottom: 90, left: 20, width: 52, height: 52, borderRadius: "50%", background: "#11100E", border: "none", color: "white", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(27,94,32,0.4)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+      <button onClick={() => setShowCreate(true)} style={{ position: "fixed", bottom: 90, left: 20, width: 52, height: 52, borderRadius: "50%", background: "#1B5E20", border: "none", color: "white", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(27,94,32,0.4)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
 
       {showCreate  && <CreateInvoiceModal onClose={() => setShowCreate(false)} />}
       {previewInv  && <InvoicePreviewModal invoice={previewInv} onClose={() => setPreviewInv(null)} onToast={toast} />}
@@ -227,7 +229,7 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
   const [client, setClient] = useState("");
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
-  const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic, sans-serif", background: "#F7F4EE", color: "#11100E", outline: "none", boxSizing: "border-box", textAlign: "right", direction: "rtl" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic, sans-serif", background: "#FAFAF8", color: "#11100E", outline: "none", boxSizing: "border-box", textAlign: "right", direction: "rtl" };
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-end" }}>
       <div style={{ background: "#FFFDF8", borderRadius: "24px 24px 0 0", padding: "24px 20px", width: "100%", maxHeight: "85vh", overflow: "auto", fontFamily: "IBM Plex Sans Arabic, sans-serif", position: "relative" }}>
@@ -258,7 +260,7 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setStep(1)} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>← رجوع</button>
-              <button onClick={onClose} style={{ flex: 2, background: "#11100E", color: "#FFFDF8", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إنشاء الفاتورة</button>
+              <button onClick={onClose} style={{ flex: 2, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إنشاء الفاتورة</button>
             </div>
           </div>
         )}
@@ -270,6 +272,7 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 export function ClientsScreen({ onNavigate }: { onNavigate: (page: string) => void }) {
+  void onNavigate;
   const [selected, setSelected] = useState<typeof D.clients[0] | null>(null);
   const [sort, setSort] = useState("name");
   const sorted = [...D.clients].sort((a, b) => {
@@ -279,8 +282,8 @@ export function ClientsScreen({ onNavigate }: { onNavigate: (page: string) => vo
   });
   if (selected) return <ClientDetail client={selected} onBack={() => setSelected(null)} />;
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>العملاء</div>
@@ -317,8 +320,8 @@ export function ClientsScreen({ onNavigate }: { onNavigate: (page: string) => vo
 function ClientDetail({ client, onBack }: { client: typeof D.clients[0]; onBack: () => void }) {
   const payRatio = Math.round((client.totalPaid / client.totalInvoiced) * 100);
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 30px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 30px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 10, padding: "6px 14px", color: "white", fontSize: 13, cursor: "pointer", marginBottom: 16, fontFamily: "IBM Plex Sans Arabic" }}>→ رجوع</button>
@@ -369,8 +372,8 @@ export function ExpensesScreen({ toast }: { toast?: (msg: string, type?: string)
     return Car03Icon;
   };
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>المصاريف</div>
@@ -411,7 +414,7 @@ export function ExpensesScreen({ toast }: { toast?: (msg: string, type?: string)
                   <span>{t.date}</span><HalalBadge halal={t.halal} />
                 </div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: t.type === "income" ? "#11100E" : "#11100E" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: t.type === "income" ? "#1B5E20" : "#11100E" }}>
                 {t.type === "income" ? "+" : ""}{fmt(Math.abs(t.amount))}
               </div>
             </div>
@@ -428,8 +431,8 @@ export function ZakatScreen({ toast }: { toast?: (msg: string, type?: string) =>
   const z = D.zakat;
   const pct = Math.min(100, Math.round((z.eligible / z.nisab) * 100));
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 30px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "linear-gradient(135deg,#C6930A,#7A5906)", padding: "20px 20px 30px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.08} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>الزكاة</div>
@@ -456,7 +459,16 @@ export function ZakatScreen({ toast }: { toast?: (msg: string, type?: string) =>
             </div>
           ))}
         </div>
-        <button style={{ width: "100%", background: "#11100E", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>
+        <div style={{ background: "#FFFDF8", borderRadius: 16, padding: "14px 16px", border: "1px solid #DDD6CA", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6D675E", marginBottom: 8 }}>
+            <span>النصاب</span>
+            <strong style={{ color: "#1B5E20" }}>{pct}%</strong>
+          </div>
+          <div style={{ background: "#F1EDE5", borderRadius: 10, height: 10, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: "#1B5E20", borderRadius: 10 }} />
+          </div>
+        </div>
+        <button onClick={() => toast?.("تم تسجيل دفع الزكاة. جزاك الله خيراً.", "success")} style={{ width: "100%", background: "linear-gradient(135deg,#C6930A,#7A5906)", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>
           أدّ زكاتك الآن ✓
         </button>
         <PurificationLedger />
@@ -470,8 +482,8 @@ export function ContractsScreen() {
   const [selected, setSelected] = useState<typeof D.contracts[0] | null>(null);
   if (selected) return <ContractDetail contract={selected} onBack={() => setSelected(null)} />;
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>العقود</div>
@@ -479,9 +491,9 @@ export function ContractsScreen() {
         </div>
       </div>
       <div style={{ padding: "16px" }}>
-        <div style={{ background: "#F1EDE5", border: "2px dashed #11100E", borderRadius: 16, padding: "20px", textAlign: "center", marginBottom: 16, cursor: "pointer" }}>
+        <div style={{ background: "#F3E5F5", border: "2px dashed #7B1FA2", borderRadius: 16, padding: "20px", textAlign: "center", marginBottom: 16, cursor: "pointer" }}>
           <div style={{ fontSize: 28 }}>📎</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E", marginTop: 8 }}>ارفع عقداً للتحليل</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>ارفع عقداً للتحليل</div>
           <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>PDF — يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً</div>
         </div>
         {D.contracts.map((c) => (
@@ -514,8 +526,8 @@ export function ContractsScreen() {
 
 function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0]; onBack: () => void }) {
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 10, padding: "6px 14px", color: "white", fontSize: 13, cursor: "pointer", marginBottom: 12, fontFamily: "IBM Plex Sans Arabic" }}>→ رجوع</button>
@@ -527,14 +539,14 @@ function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0];
         {D.contractFlags.map((flag, i) => (
           <div key={i} style={{ background: "#FFFDF8", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, background: flag.severity === "critical" ? "#FFFDF8" : "#FFF9E8", color: flag.severity === "critical" ? "#B3261E" : "#8A6400" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 10, background: flag.severity === "critical" ? "#FFEBEE" : "#FFF3E0", color: flag.severity === "critical" ? "#B71C1C" : "#E65100" }}>
                 {flag.severity === "critical" ? "حرج" : "تحذير"}
               </span>
               <span style={{ fontSize: 11, color: "#92897C" }}>البند: {flag.clause}</span>
             </div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#11100E", marginBottom: 6 }}>{flag.title}</div>
             <div style={{ fontSize: 12, color: "#6D675E", marginBottom: 10 }}>{flag.desc}</div>
-            <div style={{ background: "#F7F4EE", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#11100E" }}>
+            <div style={{ background: "#F0F7F0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#1B5E20" }}>
               💡 <strong>التوصية:</strong> {flag.recommendation}
             </div>
           </div>
@@ -547,8 +559,8 @@ function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0];
 // ─── Reports ──────────────────────────────────────────────────────────────────
 export function ReportsScreen() {
   return (
-    <div style={{ background: "#F7F4EE", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
-      <div style={{ background: "#11100E", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>التقارير</div>
@@ -577,6 +589,82 @@ export function ReportsScreen() {
         <div style={{ background: "#FFFDF8", borderRadius: 20, padding: "16px", border: "1px solid #DDD6CA" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E", marginBottom: 12 }}>التدفق النقدي — ٦ أشهر</div>
           <MiniChart data={D.cashflow} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+export function NotificationsScreen({ toast }: { toast?: (msg: string, type?: string, title?: string) => void }) {
+  const overdue = D.invoices.filter((i) => i.status === "overdue");
+  const notifications = [
+    ...overdue.map((invoice) => ({
+      id: invoice.id,
+      title: `فاتورة متأخرة: ${invoice.client}`,
+      body: `متأخرة ${invoice.daysOverdue} يوماً · ${fmt(invoice.amount)}`,
+      critical: true,
+      action: "ذكّر العميل",
+    })),
+    { id: "zakat", title: "موعد الزكاة قريب", body: `متبقي ${D.zakat.daysUntilDue} يوماً على موعد الدفع`, critical: false, action: "فتح الزكاة" },
+    { id: "contract", title: "عقد يحتاج مراجعة", body: "يوجد بند يحتاج توصية قبل التوقيع", critical: true, action: "مراجعة" },
+  ];
+
+  return (
+    <div style={{ minHeight: "100%", background: "#FAFAF8", paddingBottom: 24 }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 26px", color: "#FFFDF8" }}>
+        <div style={{ paddingTop: 28, fontSize: 24, fontWeight: 900 }}>الإشعارات</div>
+        <div style={{ fontSize: 13, color: "#A5D6A7", marginTop: 4 }}>التنبيهات الحرجة والمهام المهمة</div>
+      </div>
+      <div style={{ padding: "16px 20px" }}>
+        {notifications.map((item) => (
+          <div key={item.id} style={{ background: item.critical ? "#FFEBEE" : "#FFF9E8", border: `1px solid ${item.critical ? "#FFCDD2" : "#FFE0A3"}`, borderRadius: 16, padding: 14, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: item.critical ? "#B71C1C" : "#9C7614", color: "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <MasrafIcon icon={Alert02Icon} size={18} color="currentColor" strokeWidth={2} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: item.critical ? "#B71C1C" : "#8A6400", marginBottom: 4 }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: "#5C5346", lineHeight: 1.6 }}>{item.body}</div>
+                <button onClick={() => toast?.("تم تنفيذ الإجراء", "success", item.action)} style={{ marginTop: 10, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>{item.action}</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+export function SettingsScreen({ toast }: { toast?: (msg: string, type?: string, title?: string) => void }) {
+  return (
+    <div style={{ minHeight: "100%", background: "#FAFAF8", paddingBottom: 24 }}>
+      <div style={{ background: "#1B5E20", padding: "20px 20px 26px", color: "#FFFDF8" }}>
+        <div style={{ paddingTop: 28, fontSize: 24, fontWeight: 900 }}>الإعدادات</div>
+        <div style={{ fontSize: 13, color: "#A5D6A7", marginTop: 4 }}>الحساب، التنبيهات، والثيم</div>
+      </div>
+      <div style={{ padding: "16px 20px" }}>
+        <div style={{ background: "#FFFDF8", border: "1px solid #DDD6CA", borderRadius: 18, padding: 16, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <Avatar initials="أش" size={48} color="#1B5E20" />
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#11100E" }}>أحمد الشمري</div>
+              <div style={{ fontSize: 12, color: "#6D675E" }}>شمري للتصميم</div>
+            </div>
+          </div>
+          {["العملة الافتراضية: USD", "لغة التقارير: العربية", "الثيم الأخضر القديم: مفعّل"].map((item) => (
+            <div key={item} style={{ padding: "10px 0", borderTop: "1px solid #F1EDE5", fontSize: 13, fontWeight: 700, color: "#1B5E20" }}>{item}</div>
+          ))}
+        </div>
+        <div style={{ background: "#FFFDF8", border: "1px solid #DDD6CA", borderRadius: 18, padding: 16 }}>
+          {["تنبيهات الفواتير", "تذكير الزكاة", "تحليل العقود", "إشعارات التقارير"].map((item) => (
+            <label key={item} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #F1EDE5" }}>
+              <span style={{ fontSize: 13, color: "#11100E", fontWeight: 800 }}>{item}</span>
+              <input type="checkbox" defaultChecked style={{ accentColor: "#1B5E20", width: 18, height: 18 }} />
+            </label>
+          ))}
+          <button onClick={() => toast?.("تم حفظ الإعدادات", "success", "الإعدادات")} style={{ width: "100%", marginTop: 14, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-ar)" }}>حفظ</button>
         </div>
       </div>
     </div>

@@ -6,23 +6,27 @@ import { MasrafIcon } from "./icons";
 
 // ─── fmt helper ───────────────────────────────────────────────────────────────
 export function fmt(n: number, currency = "USD") {
+  const runtimeCurrency = typeof globalThis !== "undefined"
+    ? (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY
+    : undefined;
+  const activeCurrency = runtimeCurrency || currency;
   const symbols: Record<string, string> = { USD: "$", SAR: "ر.س", AED: "د.إ", JOD: "د.أ", EGP: "ج.م", KWD: "د.ك" };
-  const sym = symbols[currency] || currency;
+  const sym = symbols[activeCurrency] || activeCurrency;
   const num = new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(Math.abs(n));
   return `${num} ${sym}`;
 }
 
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; color: string; icon: IconSvgElement }> = {
-    paid:    { label: "مدفوعة", color: "#147A41", icon: CheckmarkCircle02Icon },
-    sent:    { label: "مُرسلة", color: "#8A6400", icon: Clock05Icon },
-    overdue: { label: "متأخرة", color: "#B3261E", icon: Alert02Icon },
-    draft:   { label: "مسودة",  color: "#6D675E", icon: Wallet02Icon },
+  const map: Record<string, { label: string; color: string; bg: string; icon: IconSvgElement }> = {
+    paid:    { label: "مدفوعة", color: "#1B5E20", bg: "#E8F5E9", icon: CheckmarkCircle02Icon },
+    sent:    { label: "مُرسلة", color: "#C6930A", bg: "#FFF8E1", icon: Clock05Icon },
+    overdue: { label: "متأخرة", color: "#B71C1C", bg: "#FFEBEE", icon: Alert02Icon },
+    draft:   { label: "مسودة",  color: "#6B6B65", bg: "#F5F5F0", icon: Wallet02Icon },
   };
   const s = map[status] || map.draft;
   return (
-    <span style={{ fontSize: 12, fontWeight: 700, color: s.color, display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <span style={{ fontSize: 11, fontWeight: 800, color: s.color, background: s.bg, display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>
       <MasrafIcon icon={s.icon} size={14} color={s.color} strokeWidth={2} />
       {s.label}
     </span>
@@ -31,14 +35,14 @@ export function StatusBadge({ status }: { status: string }) {
 
 // ─── RiskBadge ────────────────────────────────────────────────────────────────
 export function RiskBadge({ risk, score }: { risk: string; score: number }) {
-  const map: Record<string, { label: string; color: string; icon: IconSvgElement }> = {
-    low:    { label: "منخفض", color: "#147A41", icon: CheckmarkCircle02Icon },
-    medium: { label: "متوسط", color: "#8A6400", icon: Clock05Icon },
-    high:   { label: "مرتفع", color: "#B3261E", icon: Alert02Icon },
+  const map: Record<string, { label: string; color: string; bg: string; icon: IconSvgElement }> = {
+    low:    { label: "منخفض", color: "#1B5E20", bg: "#E8F5E9", icon: CheckmarkCircle02Icon },
+    medium: { label: "متوسط", color: "#C6930A", bg: "#FFF8E1", icon: Clock05Icon },
+    high:   { label: "مرتفع", color: "#B71C1C", bg: "#FFEBEE", icon: Alert02Icon },
   };
   const r = map[risk] || map.low;
   return (
-    <span style={{ fontSize: 12, fontWeight: 700, color: r.color, display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <span style={{ fontSize: 11, fontWeight: 800, color: r.color, background: r.bg, display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>
       <MasrafIcon icon={r.icon} size={14} color={r.color} strokeWidth={2} />
       {r.label} · {score}
     </span>
@@ -90,8 +94,8 @@ export function MiniChart({ data, width = 300, height = 80 }: { data: { income: 
     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height, overflow: "visible" }}>
       <defs>
         <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#11100E" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="#11100E" stopOpacity="0"    />
+          <stop offset="0%"   stopColor="#1B5E20" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#1B5E20" stopOpacity="0"    />
         </linearGradient>
         <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor="#F0C542" stopOpacity="0.18" />
@@ -100,9 +104,9 @@ export function MiniChart({ data, width = 300, height = 80 }: { data: { income: 
       </defs>
       <path d={toArea(incomePoints)} fill="url(#incomeGrad)" />
       <path d={toArea(expPoints)}    fill="url(#expGrad)"    />
-      <path d={toPath(incomePoints)} fill="none" stroke="#11100E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={toPath(incomePoints)} fill="none" stroke="#1B5E20" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       <path d={toPath(expPoints)}    fill="none" stroke="#9C7614" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4,3" />
-      {incomePoints.slice(3).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#11100E" opacity="0.35" />)}
+      {incomePoints.slice(3).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#1B5E20" opacity="0.35" />)}
     </svg>
   );
 }

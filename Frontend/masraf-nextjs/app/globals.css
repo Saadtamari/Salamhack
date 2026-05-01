@@ -1,7 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --paper: #f7f4ee;
+  --paper: #fafaf8;
   --paper-soft: #f1ede5;
   --surface: #fffdf8;
   --ink: #11100e;
@@ -11,10 +11,10 @@
   --line: #ddd6ca;
   --accent: #f0c542;
   --accent-deep: #9c7614;
-  --success: #147a41;
+  --success: #1b5e20;
   --danger: #b3261e;
   --warning: #8a6400;
-  --font-ar: "IBM Plex Sans Arabic", "Noto Kufi Arabic", system-ui, sans-serif;
+  --font-ar: var(--font-ibm-plex-arabic), var(--font-noto-kufi-arabic), system-ui, sans-serif;
 }
 
 html,

@@ -18,6 +18,7 @@ import { useToast } from "@/lib/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
 import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
+import { apiConfig, useBackendHealth, useMasrafBackend } from "@/lib/api";
 import {
   DesktopDashboard, DesktopInvoices, DesktopClients,
   DesktopExpenses, DesktopZakat, DesktopContracts, DesktopReports,
@@ -169,11 +170,18 @@ export default function MasrafDesktopApp() {
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [currency, setCurrency] = useState(MASRAF_DATA.user.currency);
+  const backendHealth = useBackendHealth();
+  const backend = useMasrafBackend();
   const { toasts, toast } = useToast();
 
   useEffect(() => {
     (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY = currency;
   }, [currency]);
+
+  useEffect(() => {
+    Object.assign(MASRAF_DATA, backend.data);
+    void Promise.resolve().then(() => setCurrency(backend.data.user.currency));
+  }, [backend.data]);
 
   function navigate(page: string) {
     setScreen(page as Page);
@@ -264,6 +272,10 @@ export default function MasrafDesktopApp() {
           <div style={{ flex: 1, maxWidth: 420, height: 42, borderRadius: 12, border: "1px solid #E8DFCF", background: "#FFFFFF", display: "flex", alignItems: "center", gap: 10, padding: "0 14px" }}>
             <span style={{ color: "#B8AC97", fontSize: 16 }}>⌕</span>
             <input placeholder="ابحث..." style={{ background: "none", border: "none", outline: "none", fontSize: 13, fontFamily: "var(--font-ar)", color: "#2A2520", width: "100%", direction: "rtl" }} />
+          </div>
+          <div title={apiConfig.baseUrl} style={{ height: 42, background: backendHealth === "online" ? "#E8F5E9" : backendHealth === "offline" ? "#FFF3E0" : "#FFFFFF", border: "1px solid #E8DFCF", borderRadius: 12, padding: "0 12px", color: backendHealth === "online" ? "#1B5E20" : backendHealth === "offline" ? "#8A6400" : "#5C5346", fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: backendHealth === "online" ? "#1B5E20" : backendHealth === "offline" ? "#E07A1F" : "#C6A35A" }} />
+            {backendHealth === "online" ? "API" : backendHealth === "offline" ? "Mock" : "Ready"}
           </div>
           <button onClick={() => setScreen("notifications")} style={{ height: 42, background: "#FFFFFF", border: "1px solid #E8DFCF", borderRadius: 12, padding: "0 14px", color: "#5C5346", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
             إشعارات

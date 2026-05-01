@@ -2,7 +2,8 @@
 import React, { useState } from "react";
 import { AiVoiceIcon, Camera01Icon } from "@hugeicons/core-free-icons";
 import { MASRAF_DATA } from "@/lib/data";
-import { Invoice } from "@/lib/data";
+import type { Invoice } from "@/lib/data";
+import { apiConfig, masrafApi } from "@/lib/api";
 import { MasrafIcon } from "./icons";
 
 // ─── Invoice Preview Modal ─────────────────────────────────────────────────────
@@ -11,6 +12,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
   onClose: () => void;
   onToast?: (msg: string, type?: string, title?: string) => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
   const user = MASRAF_DATA.user;
   const currency = typeof globalThis !== "undefined"
     ? ((globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY || MASRAF_DATA.user.currency)
@@ -22,6 +24,35 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
   const terms = "terms" in invoice ? invoice.terms : undefined;
   const fmtNum = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
   const fmtMoney = (n: number) => `${fmtNum(n)} ${sym}`;
+  const backendId = (invoice as Invoice & { backendId?: string }).backendId;
+  const existingPdfUrl = (invoice as Invoice & { pdfUrl?: string | null }).pdfUrl;
+
+  async function downloadPdf() {
+    if (existingPdfUrl) {
+      window.open(existingPdfUrl, "_blank", "noopener,noreferrer");
+      onToast?.("تم فتح الفاتورة", "success", "PDF جاهز");
+      return;
+    }
+
+    if (!apiConfig.useBackend || !backendId) {
+      onToast?.("واجهة الفاتورة جاهزة، وسيتم تنزيل PDF عند ربط بيانات الخلفية", "success", "PDF جاهز");
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      const result = await masrafApi.invoices.generatePdf(backendId);
+      const url = result.signedUrl || result.pdfUrl || result.url;
+      if (typeof url === "string" && url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      onToast?.("تم إنشاء ملف PDF بنجاح", "success", "PDF جاهز");
+    } catch {
+      onToast?.("تعذر إنشاء PDF الآن، تحقق من اتصال الخلفية", "error", "PDF");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(15,61,41,0.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "IBM Plex Sans Arabic, sans-serif", backdropFilter: "blur(4px)" }}>
@@ -29,7 +60,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px 14px 14px", borderBottom: "1px solid #E8DFCF", background: "#FFFDF8" }}>
           <button onClick={onClose} style={{ background: "transparent", color: "#5C5346", border: "1px solid #E8DFCF", borderRadius: 8, width: 32, height: 32, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           <div style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 700, color: "#C6A35A", letterSpacing: 3, textTransform: "uppercase" }}>فاتورة · INVOICE</div>
-          <button onClick={() => { onToast?.("تم تنزيل الفاتورة", "success", "PDF جاهز"); onClose(); }} style={{ background: "#0F3D29", color: "#F4EDE0", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>تنزيل PDF</button>
+          <button onClick={downloadPdf} disabled={downloading} style={{ background: "#0F3D29", color: "#F4EDE0", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: downloading ? "wait" : "pointer", fontFamily: "IBM Plex Sans Arabic" }}>{downloading ? "جاري..." : "تنزيل PDF"}</button>
         </div>
         <div style={{ padding: "32px 28px 24px" }}>
           <div style={{ textAlign: "center", marginBottom: 26 }}>
@@ -111,10 +142,32 @@ export function ChaserModal({ invoice, onClose, onToast }: {
     firm:  `تحية طيبة،\n\nنُذكّركم بضرورة تسوية الفاتورة رقم ${invoice.id} البالغة ${invoice.amount} دولار والمتأخرة منذ ${invoice.daysOverdue} يوماً.\n\nيُرجى التواصل فوراً لترتيب السداد وتجنّب أي تبعات إضافية.\n\nأحمد الشمري`,
   };
 
-  function generate() {
+  async function generate() {
     setGenerating(true);
     setMessage("");
-    setTimeout(() => { setGenerating(false); setMessage(messages[tone]); }, 1400);
+    if (apiConfig.useBackend) {
+      try {
+        const activeCurrency = typeof globalThis !== "undefined"
+          ? ((globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY || MASRAF_DATA.user.currency)
+          : MASRAF_DATA.user.currency;
+        const result = await masrafApi.ai.generateChaser({
+          clientName: invoice.client,
+          invoiceNumber: invoice.id,
+          amount: invoice.amount,
+          currency: activeCurrency,
+          daysOverdue: invoice.daysOverdue,
+          dueDate: invoice.due,
+        });
+        setMessage(result.message);
+        return;
+      } catch {
+        onToast?.("تعذر الاتصال بالذكاء الاصطناعي، تم استخدام صيغة محلية", "error");
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    setTimeout(() => { setGenerating(false); setMessage(messages[tone]); }, 700);
   }
 
   return (
@@ -158,14 +211,52 @@ export function ReceiptScanner({ onClose, onToast }: {
   onToast?: (msg: string, type?: string) => void;
 }) {
   const [stage, setStage] = useState<"upload" | "scanning" | "result">("upload");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<{ merchant: string; amount: number; category: string; date: string; halal: boolean } | null>(null);
 
-  function handleScan() {
+  async function handleScan(file?: File) {
+    if (file) setSelectedFile(file);
     setStage("scanning");
-    setTimeout(() => {
+    if (apiConfig.useBackend && file) {
+      try {
+        await masrafApi.storage.upload({ file, directory: "receipts", access: "signed" });
+      } catch {
+        onToast?.("تم حفظ الإيصال محلياً مؤقتاً، تحقق من اتصال التخزين", "error");
+      }
+    }
+    window.setTimeout(() => {
       setResult({ merchant: "مطعم الرياض", amount: 42, category: "طعام ومطاعم", date: "٢٧ أبريل ٢٠٢٦", halal: true });
       setStage("result");
-    }, 2000);
+    }, 900);
+  }
+
+  async function addExpense() {
+    if (!result) return;
+
+    if (apiConfig.useBackend) {
+      try {
+        await masrafApi.transactions.create({
+          type: "expense",
+          amount: result.amount,
+          currency: MASRAF_DATA.user.currency,
+          category: "food_dining",
+          descriptionAr: result.merchant,
+          merchantName: result.merchant,
+          transactionDate: new Date().toISOString().slice(0, 10),
+          isHalal: result.halal,
+          needsPurification: !result.halal,
+          reference: selectedFile?.name,
+        });
+        onToast?.("تم إضافة المصروف في الخلفية بنجاح", "success");
+        onClose();
+        return;
+      } catch {
+        onToast?.("تعذر حفظ المصروف في الخلفية، تم إبقاء النتيجة للمراجعة", "error");
+      }
+    }
+
+    onToast?.("تم إضافة المصروف بنجاح", "success");
+    onClose();
   }
 
   return (
@@ -175,13 +266,17 @@ export function ReceiptScanner({ onClose, onToast }: {
           <MasrafIcon icon={Camera01Icon} size={18} color="#11100E" />
           مسح الإيصال
         </div>
-        {stage === "upload" && (
-          <div onClick={handleScan} style={{ background: "#F1EDE5", border: "2px dashed #DDD6CA", borderRadius: 16, padding: "32px", textAlign: "center", cursor: "pointer", marginBottom: 16 }}>
-            <div style={{ color: "#11100E", display: "flex", justifyContent: "center", marginBottom: 12 }}><MasrafIcon icon={Camera01Icon} size={38} color="currentColor" /></div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E" }}>اضغط لرفع صورة الإيصال</div>
-            <div style={{ marginTop: 16, background: "#7B1FA2", color: "white", borderRadius: 10, padding: "10px 24px", display: "inline-block", fontSize: 13, fontWeight: 700 }}>اختر صورة (تجريبي)</div>
-          </div>
-        )}
+          {stage === "upload" && (
+            <label style={{ display: "block", background: "#F1EDE5", border: "2px dashed #DDD6CA", borderRadius: 16, padding: "32px", textAlign: "center", cursor: "pointer", marginBottom: 16 }}>
+              <input type="file" accept="image/*,.pdf" onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) void handleScan(file);
+              }} style={{ display: "none" }} />
+              <div style={{ color: "#11100E", display: "flex", justifyContent: "center", marginBottom: 12 }}><MasrafIcon icon={Camera01Icon} size={38} color="currentColor" /></div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E" }}>اضغط لرفع صورة الإيصال</div>
+              <div style={{ marginTop: 16, background: "#1B5E20", color: "white", borderRadius: 10, padding: "10px 24px", display: "inline-block", fontSize: 13, fontWeight: 700 }}>اختر صورة</div>
+            </label>
+          )}
         {stage === "scanning" && (
           <div style={{ textAlign: "center", padding: "32px" }}>
             <div style={{ fontSize: 36, marginBottom: 16 }}>🔍</div>
@@ -205,8 +300,8 @@ export function ReceiptScanner({ onClose, onToast }: {
               ))}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => { onToast?.("تم إضافة المصروف بنجاح", "success"); onClose(); }}
-                style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 12, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إضافة للمصاريف</button>
+                <button onClick={addExpense}
+                  style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 12, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إضافة للمصاريف</button>
               <button onClick={onClose} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 12, padding: "13px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>إلغاء</button>
             </div>
           </>

@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Masraf Next.js Frontend
 
-## Getting Started
+Arabic-first Masraf frontend for the SalamHack product demo. The app can run against the polished mock dataset by default, or switch to the Express backend through the typed integration layer in `lib/api`.
 
-First, run the development server:
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Backend Integration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local` from `.env.example`:
 
-## Learn More
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+NEXT_PUBLIC_USE_BACKEND=true
+NEXT_PUBLIC_STRICT_BACKEND=false
+NEXT_PUBLIC_API_TIMEOUT_MS=15000
+```
 
-To learn more about Next.js, take a look at the following resources:
+`NEXT_PUBLIC_USE_BACKEND=false` keeps the UI on the built-in demo data. When it is `true`, the frontend is ready to call:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Dashboard: `GET /api/dashboard`
+- Clients: `GET/POST/PATCH /api/clients`
+- Invoices: `GET/POST/PATCH /api/invoices`, `POST /api/invoices/pdf`
+- Expenses: `GET/POST /api/transactions`
+- Contracts: `GET/POST/DELETE /api/contracts` with multipart `file`
+- Zakat: `GET /api/zakat`, `POST /api/zakat/calculate`
+- Purification: `GET/POST /api/purification`, `POST /api/purification/:id/purify`
+- Reports: `GET /api/reports`, `POST /api/reports/generate`
+- AI: `POST /api/ai/chat`, `POST /api/ai/generate-chaser`, `POST /api/ai/analyze-contract`
+- Voice: `POST /api/voice/transcribe`, `POST /api/voice/process`, `POST /api/voice/synthesize`
+- Storage: `POST /api/storage/upload`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The API surface is centralized in `lib/api/masraf-api.ts`; response/error handling is in `lib/api/client.ts`; backend-to-UI mapping is in `lib/api/adapters.ts`; live-data loading with mock fallback is in `lib/api/useMasrafBackend.ts`.
 
-## Deploy on Vercel
+## Quality Checks
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```

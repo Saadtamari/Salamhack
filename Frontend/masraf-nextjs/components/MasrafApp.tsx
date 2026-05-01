@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Agreement01Icon,
   AiVoiceIcon,
@@ -20,6 +20,8 @@ import { useToast } from "@/lib/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
 import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
+import { MASRAF_DATA } from "@/lib/data";
+import { useMasrafBackend } from "@/lib/api";
 import {
   DashboardScreen, InvoicesScreen, ClientsScreen,
   ExpensesScreen, ZakatScreen, ContractsScreen, ReportsScreen,
@@ -90,7 +92,13 @@ export default function MasrafApp() {
   const [screen, setScreen] = useState<"onboarding" | Page>("onboarding");
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const backend = useMasrafBackend();
   const { toasts, toast } = useToast();
+
+  useEffect(() => {
+    Object.assign(MASRAF_DATA, backend.data);
+    (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY = backend.data.user.currency;
+  }, [backend.data]);
 
   function navigate(page: string) { setScreen(page as Page); }
   function handleVoiceCommand(type: string, payload: string) {

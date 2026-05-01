@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useState } from "react";
+import { logout as authLogout } from "@/lib/auth";
 import {
   Alert02Icon,
   AiVoiceIcon,
@@ -724,7 +725,7 @@ export function DesktopSettings({ toast, currency = DD.user.currency, onCurrency
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button onClick={() => toast?.("جاري تصدير بياناتك...", "info")} style={{ background: "#FBF7F0", border: "1px solid #E8DFCF", borderRadius: 10, padding: "11px 20px", fontSize: 14, fontWeight: 800, color: "#2A2520", cursor: "pointer", fontFamily: "var(--font-ar)" }}>تصدير البيانات</button>
           <button onClick={() => toast?.("تم حفظ الإعدادات", "success", "الإعدادات")} style={{ background: "#1B5E20", border: "1px solid #1B5E20", color: "#FFFFFF", borderRadius: 10, padding: "11px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>حفظ الإعدادات</button>
-          <button onClick={() => toast?.("تم تسجيل الخروج", "info")} style={{ background: "transparent", border: "1px solid #B71C1C", color: "#B71C1C", borderRadius: 10, padding: "11px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>تسجيل الخروج</button>
+          <button onClick={() => { authLogout(); toast?.("تم تسجيل الخروج", "info"); window.dispatchEvent(new Event("masraf:logout")); }} style={{ background: "transparent", border: "1px solid #B71C1C", color: "#B71C1C", borderRadius: 10, padding: "11px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>تسجيل الخروج</button>
         </div>
       </div>
     </div>

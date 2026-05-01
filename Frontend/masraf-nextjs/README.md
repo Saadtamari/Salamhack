@@ -32,9 +32,20 @@ NEXT_PUBLIC_API_TIMEOUT_MS=15000
 - Zakat: `GET /api/zakat`, `POST /api/zakat/calculate`
 - Purification: `GET/POST /api/purification`, `POST /api/purification/:id/purify`
 - Reports: `GET /api/reports`, `POST /api/reports/generate`
-- AI: `POST /api/ai/chat`, `POST /api/ai/generate-chaser`, `POST /api/ai/analyze-contract`
+- AI: `POST /api/ai/chat`, `POST /api/ai/generate-chaser`, `POST /api/ai/analyze-contract`, `POST /api/ai/scan-receipt` (Groq vision OCR)
 - Voice: `POST /api/voice/transcribe`, `POST /api/voice/process`, `POST /api/voice/synthesize`
 - Storage: `POST /api/storage/upload`
+
+## Login
+
+The app is gated behind a simple local login (no server-side auth — the access surface is intentionally limited).
+
+| Username | Password | Role |
+|---|---|---|
+| `normal_user` | `normal_user@123` | Regular user |
+| `admin` | `admin@123` | Administrator |
+
+Click either button on the login screen to auto-fill, then "تسجيل الدخول". The session is stored in `localStorage`; "تسجيل الخروج" in Settings clears it.
 
 The API surface is centralized in `lib/api/masraf-api.ts`; response/error handling is in `lib/api/client.ts`; backend-to-UI mapping is in `lib/api/adapters.ts`; live-data loading with mock fallback is in `lib/api/useMasrafBackend.ts`.
 

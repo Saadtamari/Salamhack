@@ -300,6 +300,19 @@ export type AiAction = {
   payload?: Record<string, unknown>;
 };
 
+export type ReceiptScanResult = {
+  merchantName: string;
+  merchantNameAr?: string;
+  amount: number;
+  currency: string;
+  category: ExpenseCategory;
+  transactionDate: string;
+  isHalal: boolean;
+  needsPurification: boolean;
+  descriptionAr: string;
+  notes?: string;
+};
+
 export type AiChatResult = {
   message: string;
   action?: AiAction | null;

@@ -19,6 +19,7 @@ import type {
   ExpenseCategory,
   InvoiceStatus,
   PdfResult,
+  ReceiptScanResult,
   VoiceProcessResult,
   ZakatCalculatePayload,
 } from "./types";
@@ -108,6 +109,11 @@ export const masrafApi = {
           message: `Extract this receipt into JSON with merchantName, amount, category, transactionDate, isHalal, needsPurification, and short Arabic notes: ${body.receiptText}`,
           context: { screen: "expenses", data: { currency: body.currency } },
         },
+      }),
+    scanReceipt: (file: File) =>
+      apiRequest<ReceiptScanResult>("/api/ai/scan-receipt", {
+        method: "POST",
+        formData: toFormData({ image: file }),
       }),
   },
 

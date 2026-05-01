@@ -11,8 +11,10 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
   CEREBRAS_API_KEY: z.string().min(1, "CEREBRAS_API_KEY is required"),
-  CEREBRAS_MODEL: z.string().min(1).default("qwen-3-235b-a22b-instruct-2507"),
+  CEREBRAS_MODEL: z.string().min(1).default("gpt-oss-120b"),
+  CEREBRAS_FALLBACK_MODEL: z.string().min(1).default("zai-glm-4.7"),
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
+  GROQ_CHAT_MODEL: z.string().min(1).default("openai/gpt-oss-120b"),
   GROQ_VISION_MODEL: z.string().min(1).default("meta-llama/llama-4-scout-17b-16e-instruct"),
 });
 

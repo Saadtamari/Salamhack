@@ -319,13 +319,63 @@ export type AiChatResult = {
   suggestions?: string[];
 };
 
+export type AgentPage = "dashboard" | "invoices" | "clients" | "expenses" | "zakat" | "contracts" | "reports";
+export type AgentContext = { screen?: string; conversationId?: string; data?: Record<string, unknown> };
+export type AgentHistoryMessage = { role: "user" | "assistant"; content: string };
+export type AgentToolName =
+  | "ui.navigate"
+  | "transactions.create"
+  | "transactions.list"
+  | "clients.create"
+  | "clients.find"
+  | "invoices.create_draft"
+  | "invoices.send"
+  | "invoices.send_reminder"
+  | "zakat.calculate"
+  | "reports.generate";
+
+export type AgentAction = {
+  tool: AgentToolName;
+  args: Record<string, unknown>;
+};
+
+export type AgentActionResult = {
+  executed: boolean;
+  tool: AgentToolName;
+  data?: unknown;
+  message?: string;
+  targetScreen?: AgentPage;
+};
+
+export type AgentPlan = {
+  response: string;
+  responseEn?: string;
+  intent?: string;
+  confidence: number;
+  action: AgentAction | null;
+  missingFields: string[];
+  requiresConfirmation: boolean;
+  confirmationText?: string;
+  targetScreen?: AgentPage;
+  suggestions: string[];
+};
+
+export type AgentRunResult = {
+  status: "answer" | "planned" | "needs_clarification" | "needs_confirmation" | "executed" | "rejected" | "failed";
+  message: string;
+  messageEn?: string;
+  plan: AgentPlan;
+  action?: AgentAction | null;
+  actionResult?: AgentActionResult;
+  suggestions: string[];
+};
+
 export type VoiceProcessResult = {
   transcript: string;
-  response: AiChatResult;
-  audio?: {
-    contentType: string;
-    base64?: string;
-  } | null;
+  aiResponse?: AiChatResult;
+  agentResponse?: AgentRunResult;
+  audioBase64?: string;
+  audioContentType?: string;
   logId?: string;
 };
 

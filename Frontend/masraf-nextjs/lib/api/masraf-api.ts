@@ -1,6 +1,10 @@
 import { apiBinary, apiRequest, toFormData } from "./client";
 import type {
   AiChatResult,
+  AgentAction,
+  AgentContext,
+  AgentHistoryMessage,
+  AgentRunResult,
   BackendClient,
   BackendContract,
   BackendInvoice,
@@ -92,7 +96,7 @@ export const masrafApi = {
   },
 
   ai: {
-    chat: (body: { message: string; context?: { screen?: string; data?: Record<string, unknown> }; history?: { role: "user" | "assistant"; content: string }[] }) =>
+    chat: (body: { message: string; context?: AgentContext; history?: AgentHistoryMessage[] }) =>
       apiRequest<AiChatResult>("/api/ai/chat", { method: "POST", body }),
     generateChaser: (body: { clientName: string; invoiceNumber: string; amount: number; currency: string; daysOverdue: number; dueDate: string }) =>
       apiRequest<{ message: string }>("/api/ai/generate-chaser", { method: "POST", body }),
@@ -113,16 +117,26 @@ export const masrafApi = {
       }),
   },
 
+  agent: {
+    command: (body: {
+      message?: string;
+      context?: AgentContext;
+      history?: AgentHistoryMessage[];
+      executeAction?: boolean;
+      confirmation?: { approved: boolean; action: AgentAction; idempotencyKey?: string };
+    }) => apiRequest<AgentRunResult>("/api/agent/command", { method: "POST", body }),
+  },
+
   voice: {
     transcribe: (file: File, language = "ar") =>
       apiRequest<{ text?: string; transcript?: string }>("/api/voice/transcribe", {
         method: "POST",
         formData: toFormData({ audio: file, language }),
       }),
-    process: (file: File, context?: { screen?: string; data?: Record<string, unknown> }) =>
+    process: (file: File, context?: AgentContext, executeAction = true, history?: AgentHistoryMessage[]) =>
       apiRequest<VoiceProcessResult>("/api/voice/process", {
         method: "POST",
-        formData: toFormData({ audio: file, context: context ? JSON.stringify(context) : undefined }),
+        formData: toFormData({ audio: file, context, executeAction, history }),
       }),
     synthesize: (text: string, voice = "fatima") => apiBinary("/api/voice/synthesize", { method: "POST", body: { text, voice } }),
   },

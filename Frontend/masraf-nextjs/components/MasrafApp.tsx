@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Agreement01Icon,
   AiVoiceIcon,
@@ -22,6 +22,7 @@ import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
 import { MASRAF_DATA } from "@/lib/data";
 import { useMasrafBackend } from "@/lib/api";
+import { buildAgentSessionSnapshot } from "@/lib/api/agent-context";
 import {
   DashboardScreen, InvoicesScreen, ClientsScreen,
   ExpensesScreen, ZakatScreen, ContractsScreen, ReportsScreen,
@@ -94,6 +95,7 @@ export default function MasrafApp() {
   const [moreOpen, setMoreOpen] = useState(false);
   const backend = useMasrafBackend();
   const { toasts, toast } = useToast();
+  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(backend.data), [backend.data]);
 
   useEffect(() => {
     Object.assign(MASRAF_DATA, backend.data);
@@ -103,6 +105,7 @@ export default function MasrafApp() {
   function navigate(page: string) { setScreen(page as Page); }
   function handleVoiceCommand(type: string, payload: string) {
     if (type === "navigate") navigate(payload);
+    if (type === "refresh") void backend.refetch();
   }
 
   const screenMap: Record<Page, React.ReactNode> = {
@@ -186,7 +189,7 @@ export default function MasrafApp() {
 
         {voiceOpen && (
           <div style={{ position: "absolute", inset: 0, zIndex: 100, pointerEvents: "none" }}>
-            <VoiceOverlay onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); setVoiceOpen(false); }} currentScreen={String(screen) === "onboarding" ? "dashboard" : String(screen)} />
+            <VoiceOverlay currentScreen={screen} sessionData={agentSessionData} onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); if (t !== "refresh") setVoiceOpen(false); }} />
           </div>
         )}
 

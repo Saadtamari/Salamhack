@@ -308,7 +308,6 @@ export default function MasrafDesktopApp() {
             if (type === "refresh") void backend.refetch();
             if (type !== "refresh") setVoiceOpen(false);
           }}
-          currentScreen={screen}
         />
       )}
     </div>

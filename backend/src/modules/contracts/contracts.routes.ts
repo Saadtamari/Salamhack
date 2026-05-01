@@ -33,24 +33,11 @@ contractsRouter.get("/", (request, response, next) => {
 contractsRouter.post(
   "/",
   (request, response, next) => {
-    console.log("[contracts] POST /api/contracts entered", {
-      contentType: request.headers["content-type"],
-      bodyKeys: Object.keys(request.body ?? {}),
-    });
-
     upload.single("file")(request, response, (error) => {
       if (error) {
-        console.error("[contracts] multer upload failed", error);
         next(error);
         return;
       }
-
-      console.log("[contracts] multer upload completed", {
-      hasFile: Boolean(request.file),
-      fileName: request.file?.originalname,
-      mimeType: request.file?.mimetype,
-      size: request.file?.size,
-    });
 
       controller.create(request, response).catch(next);
     });

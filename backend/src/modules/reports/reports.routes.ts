@@ -52,6 +52,30 @@ reportsRouter.post("/generate", (request, response, next) => {
 
 /**
  * @swagger
+ * /api/reports/pdf:
+ *   post:
+ *     summary: Generate report PDF
+ *     tags:
+ *       - Reports
+ */
+reportsRouter.post("/pdf", (request, response, next) => {
+  controller.generatePdf(request, response).catch(next);
+});
+
+/**
+ * @swagger
+ * /api/reports/{id}/pdf:
+ *   get:
+ *     summary: Generate report PDF by id
+ *     tags:
+ *       - Reports
+ */
+reportsRouter.get("/:id/pdf", (request, response, next) => {
+  controller.generatePdfById(request, response).catch(next);
+});
+
+/**
+ * @swagger
  * /api/reports/{id}:
  *   get:
  *     summary: Get report by id

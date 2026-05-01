@@ -15,6 +15,11 @@ const paramsSchema = z.object({
   id: z.string().trim().min(1),
 });
 
+const pdfBodySchema = z.object({
+  reportId: z.string().trim().min(1).optional(),
+  report_id: z.string().trim().min(1).optional(),
+});
+
 export class ReportsController {
   constructor(private readonly service: ReportsService) {}
 
@@ -45,6 +50,36 @@ export class ReportsController {
     response.status(201).json({
       success: true,
       data: report,
+    });
+  }
+
+  async generatePdf(request: Request, response: Response): Promise<void> {
+    const body = pdfBodySchema.parse(request.body);
+    const reportId = body.reportId ?? body.report_id;
+
+    if (!reportId) {
+      response.status(400).json({
+        success: false,
+        message: "reportId or report_id is required",
+      });
+      return;
+    }
+
+    const result = await this.service.generatePdf(reportId);
+
+    response.json({
+      success: true,
+      data: result,
+    });
+  }
+
+  async generatePdfById(request: Request, response: Response): Promise<void> {
+    const { id } = paramsSchema.parse(request.params);
+    const result = await this.service.generatePdf(id);
+
+    response.json({
+      success: true,
+      data: result,
     });
   }
 }

@@ -19,6 +19,10 @@ const notoKufiArabic = Noto_Kufi_Arabic({
 export const metadata: Metadata = {
   title: "مصرف - Masraf",
   description: "المستشار المالي الذكي للمستقلين العرب",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

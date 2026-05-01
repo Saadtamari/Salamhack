@@ -97,9 +97,9 @@ export async function groqTextToSpeech(
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: options.model ?? "canopylabs/orpheus-arabic-saudi",
+      model: options.model ?? "playai-tts-arabic",
       input: text,
-      voice: options.voice ?? "abdullah",
+      voice: options.voice ?? "Ahmad-PlayAI",
       response_format: options.responseFormat ?? "wav",
     }),
   });

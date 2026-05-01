@@ -135,7 +135,7 @@ export function VoiceOverlay({
       setResult(agent ?? null);
       setMessage(agent?.message ?? response.aiResponse?.message ?? "Done.");
       setPhase("responding");
-      playTts(response.audioBase64, response.audioContentType);
+      playTts(response.audioBase64, response.audioContentType, agent?.message ?? response.aiResponse?.message);
 
       if (agent) {
         rememberTurn(response.transcript || "", agent.message);
@@ -221,15 +221,28 @@ export function VoiceOverlay({
     streamRef.current = null;
   }
 
-  function playTts(base64?: string, contentType?: string) {
+  function speakWithBrowser(text: string) {
+    if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ar-SA";
+    utter.rate = 0.95;
+    const voices = window.speechSynthesis.getVoices();
+    const arVoice = voices.find((v) => v.lang.startsWith("ar"));
+    if (arVoice) utter.voice = arVoice;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+
+  function playTts(base64?: string, contentType?: string, text?: string) {
     if (!base64) {
+      speakWithBrowser(text ?? "");
       return;
     }
 
     audioRef.current?.pause();
     const audio = new Audio(`data:${contentType || "audio/wav"};base64,${base64}`);
     audioRef.current = audio;
-    void audio.play().catch(() => undefined);
+    void audio.play().catch(() => speakWithBrowser(text ?? ""));
   }
 
   const pendingAction = result?.status === "needs_confirmation" ? result.action : null;

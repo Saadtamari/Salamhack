@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { logout as authLogout } from "@/lib/auth";
 import {
   Alert02Icon,
@@ -449,6 +449,29 @@ export function DesktopContracts({ toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
   const [selected, setSelected] = useState<typeof DD.contracts[0] | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [uploadedContracts, setUploadedContracts] = useState<typeof DD.contracts>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const allContracts = [...uploadedContracts, ...DD.contracts];
+
+  async function handleContractFile(file: File) {
+    setAnalyzing(true);
+    toast?.(`جاري تحليل "${file.name}" بالذكاء الاصطناعي...`, "info", "رفع عقد");
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    const newContract = {
+      id: `CNT-${Date.now()}`,
+      title: file.name.replace(/\.pdf$/i, "").replace(/_/g, " "),
+      client: "عميل",
+      date: new Date().toLocaleDateString("ar-SA"),
+      amount: 0,
+      criticalFlags: 1,
+      status: "analyzed",
+    } as typeof DD.contracts[0];
+    setUploadedContracts((prev) => [newContract, ...prev]);
+    setSelected(newContract);
+    setAnalyzing(false);
+    toast?.("تم تحليل العقد — يوجد بند يحتاج مراجعة", "success", "تحليل العقد");
+  }
 
   return (
     <div>
@@ -456,16 +479,31 @@ export function DesktopContracts({ toast }: {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 20 }}>
         <div>
           {/* Upload area */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleContractFile(file);
+              e.target.value = "";
+            }}
+          />
           <div
-            style={{ background: "#F3E5F5", border: "2px dashed #7B1FA2", borderRadius: 16, padding: "24px", textAlign: "center", marginBottom: 20, cursor: "pointer" }}
-            onClick={() => toast?.("يرجى رفع ملف PDF", "info", "رفع عقد")}
+            style={{ background: analyzing ? "#EDE7F6" : "#F3E5F5", border: `2px dashed ${analyzing ? "#4527A0" : "#7B1FA2"}`, borderRadius: 16, padding: "24px", textAlign: "center", marginBottom: 20, cursor: analyzing ? "wait" : "pointer", transition: "all 0.2s" }}
+            onClick={() => !analyzing && fileInputRef.current?.click()}
           >
-            <div style={{ fontSize: 36 }}>📎</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>ارفع عقداً للتحليل</div>
-            <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً</div>
+            <div style={{ fontSize: 36 }}>{analyzing ? "⏳" : "📎"}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>
+              {analyzing ? "جاري تحليل العقد..." : "ارفع عقداً للتحليل"}
+            </div>
+            <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>
+              {analyzing ? "يُحلّل الذكاء الاصطناعي البنود الخطرة..." : "اضغط لاختيار ملف PDF · يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً"}
+            </div>
           </div>
 
-          {DD.contracts.map((c) => (
+          {allContracts.map((c) => (
             <div key={c.id} onClick={() => setSelected(selected?.id === c.id ? null : c)}
               style={{ background: "#FFFDF8", borderRadius: 16, padding: "18px 20px", marginBottom: 12, border: `2px solid ${selected?.id === c.id ? "#7B1FA2" : "#DDD6CA"}`, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -518,6 +556,76 @@ export function DesktopContracts({ toast }: {
 }
 
 // ─── Desktop Reports ──────────────────────────────────────────────────────────
+function downloadReportPdf(toast?: (msg: string, type?: string) => void) {
+  const win = window.open("", "_blank", "width=820,height=1000");
+  if (!win) {
+    toast?.("يرجى السماح بالنوافذ المنبثقة لتنزيل التقرير", "error");
+    return;
+  }
+  const fmtN = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
+  const net = DD.stats.totalIncome - DD.stats.totalExpenses;
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>تقرير أبريل ٢٠٢٦ — مصرف</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;background:#FAFAF8;color:#2A2520;padding:32px 24px}
+.wrap{max-width:720px;margin:0 auto}
+.print-btn{display:block;width:100%;padding:12px;background:#1B5E20;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:20px;font-family:inherit}
+.header{background:linear-gradient(135deg,#1B5E20,#0D3B0F);border-radius:18px;padding:28px 32px;color:white;margin-bottom:24px}
+.header h1{font-size:28px;font-weight:900;margin-bottom:4px}
+.header p{font-size:14px;opacity:0.75}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:white;border:1px solid #E8DFCF;border-radius:14px;padding:18px 20px}
+.kpi-label{font-size:11px;color:#92897C;margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:900;color:#11100E}
+.kpi-delta{font-size:12px;font-weight:700;margin-top:4px}
+.section{background:white;border:1px solid #E8DFCF;border-radius:18px;padding:24px;margin-bottom:18px}
+.section h2{font-size:15px;font-weight:800;color:#11100E;margin-bottom:16px}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F4EDE0;font-size:14px}
+.row:last-child{border-bottom:none}
+.grand{border-top:2px solid #1B5E20;margin-top:8px;padding-top:12px;display:flex;justify-content:space-between;font-size:16px;font-weight:800}
+.ai-box{background:#F0F7F0;border:1px solid #C8E6C9;border-radius:14px;padding:16px;font-size:13px;color:#1B5E20;line-height:1.8}
+.footer{text-align:center;margin-top:24px;font-size:11px;color:#B8AC97;letter-spacing:1.5px;text-transform:uppercase}
+@media print{.print-btn{display:none}body{padding:0}@page{margin:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<button class="print-btn" onclick="window.print()">طباعة / حفظ كـ PDF ↓</button>
+<div class="header">
+  <h1>تقرير أبريل ٢٠٢٦</h1>
+  <p>مصرف — التقرير المالي الشهري · أحمد الشمري</p>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">إجمالي الدخل</div><div class="kpi-value">${fmtN(DD.stats.totalIncome)}</div><div class="kpi-delta" style="color:#1B5E20">+67%</div></div>
+  <div class="kpi"><div class="kpi-label">إجمالي المصاريف</div><div class="kpi-value">${fmtN(DD.stats.totalExpenses)}</div><div class="kpi-delta" style="color:#B3261E">+8%</div></div>
+  <div class="kpi"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${fmtN(net)}</div><div class="kpi-delta" style="color:#1B5E20">+82%</div></div>
+  <div class="kpi"><div class="kpi-label">فواتير مدفوعة</div><div class="kpi-value">٢</div><div class="kpi-delta" style="color:#9C7614">من ٦</div></div>
+</div>
+<div class="section">
+  <h2>الملخص المالي</h2>
+  <div class="row"><span style="color:#6D675E">إجمالي الدخل</span><span style="font-weight:700">${fmtN(DD.stats.totalIncome)} USD</span></div>
+  <div class="row"><span style="color:#6D675E">إجمالي المصاريف</span><span style="font-weight:700">${fmtN(DD.stats.totalExpenses)} USD</span></div>
+  <div class="row"><span style="color:#6D675E">فواتير معلقة</span><span style="font-weight:700">${fmtN(DD.stats.pending)} USD</span></div>
+  <div class="grand"><span>صافي الربح</span><span style="color:#1B5E20">${fmtN(net)} USD</span></div>
+</div>
+<div class="section">
+  <h2>ملخص الذكاء الاصطناعي</h2>
+  <div class="ai-box">أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك ارتفع <strong>٦٧٪</strong> مقارنة بمارس وهو أعلى مستوى في ٦ أشهر. لديك <strong>عميلان</strong> يحتاجان متابعة تحصيل عاجلة. مصاريفك في حدود معقولة (<strong>٣١٪</strong> من الدخل).</div>
+</div>
+<div class="footer">مصرف · Masraf · تقرير أبريل ٢٠٢٦ · Sharia-Compliant</div>
+</div>
+</body>
+</html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 450);
+}
+
 export function DesktopReports({ toast }: {
   toast?: (msg: string, type?: string) => void;
 }) {
@@ -525,7 +633,7 @@ export function DesktopReports({ toast }: {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 900, color: "#11100E" }}>التقارير</div>
-        <button onClick={() => toast?.("جاري تنزيل تقرير أبريل PDF...", "success")} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => downloadReportPdf(toast)} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
           <MasrafIcon icon={Download01Icon} size={17} color="currentColor" />
           تنزيل PDF
         </button>

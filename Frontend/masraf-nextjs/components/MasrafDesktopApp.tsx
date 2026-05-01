@@ -20,6 +20,7 @@ import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
 import { apiConfig, useBackendHealth, useMasrafBackend } from "@/lib/api";
 import { buildAgentSessionSnapshot } from "@/lib/api/agent-context";
+import { IslamicPattern } from "@/components/ui";
 import {
   DesktopDashboard, DesktopInvoices, DesktopClients,
   DesktopExpenses, DesktopZakat, DesktopContracts, DesktopReports,
@@ -209,8 +210,8 @@ export default function MasrafDesktopApp() {
     <div style={{ display: "flex", height: "100vh", background: "#FAFAF8", fontFamily: "var(--font-ar)", direction: "rtl", position: "relative", color: "#11100E" }}>
       <ToastContainer toasts={toasts} />
 
-      <aside style={{ width: 260, background: "#0F3D29", color: "#F4EDE0", display: "flex", flexDirection: "column", flexShrink: 0, borderLeft: "1px solid rgba(0,0,0,0.06)", position: "relative", overflow: "hidden" }}>
-        <SidebarPattern />
+      <aside style={{ width: 260, background: "linear-gradient(135deg, #1B5E20, #0D3B0F)", color: "#F4EDE0", display: "flex", flexDirection: "column", flexShrink: 0, borderLeft: "1px solid rgba(0,0,0,0.06)", position: "relative", overflow: "hidden" }}>
+        <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ padding: "28px 24px 24px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <div style={{ width: 46, height: 46, borderRadius: 12, background: "#C6A35A", color: "#0F3D29", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 900, marginBottom: 14 }}>م</div>

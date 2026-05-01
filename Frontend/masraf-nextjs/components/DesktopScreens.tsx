@@ -19,6 +19,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { MASRAF_DATA } from "@/lib/data";
+import { apiConfig, masrafApi } from "@/lib/api";
 import { fmt, IslamicPattern, Avatar, StatusBadge, RiskBadge, MiniChart, DonutChart, RunwayIndicator, HalalBadge, EmptyState } from "./ui";
 import { MasrafIcon } from "./icons";
 import { InvoicePreviewModal, ChaserModal, ReceiptScanner, PurificationLedger } from "./Modals";
@@ -137,22 +138,85 @@ export function DesktopDashboard({ onNavigate, toast }: {
 }
 
 // ─── Desktop Invoices ─────────────────────────────────────────────────────────
+type InvoiceExtended = Invoice & { description?: string; backendId?: string };
+
 export function DesktopInvoices({ toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
-  const [filter, setFilter]       = useState("all");
-  const [previewInv, setPreviewInv] = useState<Invoice | null>(null);
+  const [filter, setFilter]         = useState("all");
+  const [previewInv, setPreviewInv] = useState<InvoiceExtended | null>(null);
   const [chaserInv,  setChaserInv]  = useState<Invoice | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [creating,   setCreating]   = useState(false);
+  const [localInvoices, setLocalInvoices] = useState<InvoiceExtended[]>([]);
+  const [form, setForm] = useState({ client: DD.clients[0]?.name ?? "", description: "", amount: "", terms: "٣٠ يوم" });
 
-  const filtered = filter === "all" ? DD.invoices : DD.invoices.filter((i) => i.status === filter);
+  const allInvoices: InvoiceExtended[] = [...localInvoices, ...DD.invoices];
+  const filtered = filter === "all" ? allInvoices : allInvoices.filter((i) => i.status === filter);
+
+  async function handleCreate() {
+    const amount = Number(form.amount);
+    if (!form.client || !(amount > 0)) {
+      toast?.("يرجى إدخال اسم العميل والمبلغ", "error", "بيانات ناقصة");
+      return;
+    }
+    setCreating(true);
+    const today = new Date();
+    const dueDate = new Date(today);
+    dueDate.setDate(dueDate.getDate() + (form.terms === "١٥ يوم" ? 15 : 30));
+    const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const dueDateStr = `${dueDate.getDate()} ${AR_MONTHS[dueDate.getMonth()]} ${dueDate.getFullYear()}`;
+    const id = `INV-${today.getFullYear()}-${String(today.getTime()).slice(-4)}`;
+
+    const newInv: InvoiceExtended = {
+      id,
+      client: form.client,
+      clientEn: form.client,
+      amount,
+      status: "draft",
+      due: dueDateStr,
+      daysOverdue: 0,
+      description: form.description || "خدمات مهنية",
+    };
+
+    if (apiConfig.useBackend) {
+      try {
+        const subtotal = Math.round((amount / 1.16) * 100) / 100;
+        const vatAmount = Math.round((amount - subtotal) * 100) / 100;
+        const result = await masrafApi.invoices.create({
+          title: form.description || "Invoice",
+          titleAr: form.description || "فاتورة",
+          subtotal,
+          vatAmount,
+          total: amount,
+          currency: DD.user.currency,
+          paymentTerms: form.terms === "مرابحة" ? "murabaha" : form.terms === "١٥ يوم" ? "net_15" : "net_30",
+          dueDate: dueDate.toISOString().split("T")[0],
+          status: "draft",
+          items: [{ description: form.description || "Professional services", descriptionAr: form.description || "خدمات مهنية", quantity: 1, unitPrice: subtotal, total: subtotal }],
+        });
+        newInv.backendId = result.id;
+        newInv.id = result.invoiceNumber || id;
+      } catch {
+        // backend failed — keep local invoice
+      }
+    }
+
+    setLocalInvoices((prev) => [newInv, ...prev]);
+    setForm({ client: DD.clients[0]?.name ?? "", description: "", amount: "", terms: "٣٠ يوم" });
+    setShowCreate(false);
+    setCreating(false);
+    toast?.("تم إنشاء الفاتورة بنجاح", "success", "فاتورة جديدة");
+  }
+
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8", boxSizing: "border-box" };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#11100E" }}>الفواتير</div>
-          <div style={{ fontSize: 13, color: "#92897C", marginTop: 2 }}>{DD.invoices.length} فاتورة · {fmt(DD.stats.pending)} معلقة</div>
+          <div style={{ fontSize: 13, color: "#92897C", marginTop: 2 }}>{allInvoices.length} فاتورة · {fmt(DD.stats.pending)} معلقة</div>
         </div>
         <button onClick={() => setShowCreate(true)} style={{ background: "#1B5E20", color: "white", border: "none", borderRadius: 14, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>
           + فاتورة جديدة
@@ -213,24 +277,37 @@ export function DesktopInvoices({ toast }: {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#FFFDF8", borderRadius: 24, padding: "28px", width: 480, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: "#11100E", marginBottom: 20 }}>فاتورة جديدة</div>
-            {["العميل", "وصف الخدمة", "المبلغ (USD)", "شروط الدفع"].map((f) => (
-              <div key={f} style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>{f}</label>
-                {f === "العميل" ? (
-                  <select style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8" }}>
-                    {DD.clients.map((c) => <option key={c.id}>{c.name}</option>)}
-                  </select>
-                ) : f === "شروط الدفع" ? (
-                  <select style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8" }}>
-                    <option>٣٠ يوم</option><option>١٥ يوم</option><option>مرابحة</option>
-                  </select>
-                ) : (
-                  <input placeholder={f === "المبلغ (USD)" ? "0" : ""} style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8", boxSizing: "border-box" }} />
-                )}
-              </div>
-            ))}
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>العميل</label>
+              <select value={form.client} onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} style={inputStyle}>
+                {DD.clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>وصف الخدمة</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="مثال: تصميم هوية بصرية" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>المبلغ ({DD.user.currency})</label>
+              <input type="number" min="0" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>شروط الدفع</label>
+              <select value={form.terms} onChange={(e) => setForm((f) => ({ ...f, terms: e.target.value }))} style={inputStyle}>
+                <option value="٣٠ يوم">٣٠ يوم</option>
+                <option value="١٥ يوم">١٥ يوم</option>
+                <option value="مرابحة">مرابحة</option>
+              </select>
+            </div>
+
             <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={() => { setShowCreate(false); toast?.("تم إنشاء الفاتورة بنجاح", "success", "فاتورة جديدة"); }} style={{ flex: 2, background: "#11100E", color: "white", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إنشاء الفاتورة</button>
+              <button onClick={() => void handleCreate()} disabled={creating} style={{ flex: 2, background: creating ? "#DDD6CA" : "#11100E", color: creating ? "#92897C" : "white", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer", fontFamily: "IBM Plex Sans Arabic" }}>
+                {creating ? "جاري الإنشاء..." : "✓ إنشاء الفاتورة"}
+              </button>
               <button onClick={() => setShowCreate(false)} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>إلغاء</button>
             </div>
           </div>

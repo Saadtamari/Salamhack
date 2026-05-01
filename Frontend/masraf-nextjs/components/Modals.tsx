@@ -14,11 +14,12 @@ function fmtAr(n: number) {
 function buildInvoiceHtml(p: {
   id: string; client: string; clientEn: string; amount: number; due: string;
   status: string; business: string; currency: string; sym: string;
-  subtotal: number; vat: number; terms?: string;
+  subtotal: number; vat: number; terms?: string; description?: string;
 }) {
   const m = (n: number) => `${fmtAr(n)} ${p.sym}`;
   const numDisplay = p.id.split("-").pop() ?? p.id;
   const statusColor = p.status === "overdue" ? "#B71C1C" : "#2A2520";
+  const desc = p.description || "تصميم هوية بصرية";
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -76,7 +77,7 @@ body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;backgroun
     <div class="items">
       <div class="item-hdr"><span>الخدمة</span><span>المبلغ</span></div>
       <div class="item-row">
-        <div><div class="item-name">تصميم هوية بصرية</div><div class="item-sub">Brand Identity Design · ١ × ${m(p.subtotal)}</div></div>
+        <div><div class="item-name">${desc}</div><div class="item-sub">Professional Service · ١ × ${m(p.subtotal)}</div></div>
         <div class="item-amt">${m(p.subtotal)}</div>
       </div>
     </div>
@@ -112,6 +113,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
   const fmtMoney = (n: number) => `${fmtNum(n)} ${sym}`;
   const backendId = (invoice as Invoice & { backendId?: string }).backendId;
   const existingPdfUrl = (invoice as Invoice & { pdfUrl?: string | null }).pdfUrl;
+  const description = (invoice as Invoice & { description?: string }).description || "تصميم هوية بصرية";
 
   function downloadPdf() {
     if (existingPdfUrl) {
@@ -162,6 +164,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
       subtotal,
       vat,
       terms,
+      description,
     });
     win.document.write(html);
     win.document.close();
@@ -215,8 +218,8 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 16, alignItems: "baseline" }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2520" }}>تصميم هوية بصرية</div>
-                <div style={{ fontSize: 11, color: "#8A7F6F", marginTop: 2 }}>Brand Identity Design · ١ × {fmtMoney(subtotal)}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2520" }}>{description}</div>
+                <div style={{ fontSize: 11, color: "#8A7F6F", marginTop: 2 }}>Professional Service · ١ × {fmtMoney(subtotal)}</div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 800, color: "#2A2520" }}>{fmtMoney(subtotal)}</div>
             </div>

@@ -10,6 +10,9 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
+  CEREBRAS_API_KEY: z.string().min(1, "CEREBRAS_API_KEY is required"),
+  CEREBRAS_MODEL: z.string().min(1).default("qwen-3-235b"),
+  GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);

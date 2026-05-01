@@ -18,7 +18,7 @@ export default function Home() {
         .mobile-view {
           display: flex;
           min-height: 100vh;
-          background: #11100e;
+          background: linear-gradient(135deg, #0D3B0F 0%, #1B5E20 52%, #FAFAF8 52%);
           align-items: center;
           justify-content: center;
           padding: 40px 20px;

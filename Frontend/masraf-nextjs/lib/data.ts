@@ -5,7 +5,7 @@ export const MASRAF_DATA = {
     name: "أحمد الشمري",
     business: "شمري للتصميم",
     balance: 12840.50,
-    currency: "USD",
+    currency: "JOD",
     country: "JO",
   },
 
@@ -64,7 +64,7 @@ export const MASRAF_DATA = {
 
   zakat: {
     totalAssets: 28400,
-    nisab: 5200,
+    nisab: 12000,
     eligible: 12840.50,
     rate: 0.025,
     amount: 321,

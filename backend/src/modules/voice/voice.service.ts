@@ -54,7 +54,7 @@ export class VoiceService {
   async process(
     audioBuffer: Buffer,
     context?: AgentContext,
-    options: { executeAction?: boolean; history?: AgentHistoryMessage[] } = {},
+    options: { executeAction?: boolean; history?: AgentHistoryMessage[]; voice?: string } = {},
   ): Promise<VoiceProcessResult> {
     const startTime = Date.now();
 
@@ -83,7 +83,7 @@ export class VoiceService {
     let audioBase64: string | undefined;
     let audioContentType: string | undefined;
     try {
-      const ttsResult = await this.synthesize(agentResponse.message);
+      const ttsResult = await this.synthesize(agentResponse.message, options.voice);
       audioBase64 = ttsResult.audioBuffer.toString("base64");
       audioContentType = ttsResult.contentType;
     } catch (error) {
@@ -116,17 +116,17 @@ export class VoiceService {
   private emptyAgentResponse(): AgentRunResult {
     return {
       status: "needs_clarification",
-      message: "I could not understand the audio. Try again clearly.",
+      message: "لم أتمكن من فهم الصوت. جرّب مرة أخرى بصوت أوضح.",
       plan: {
-        response: "I could not understand the audio. Try again clearly.",
+        response: "لم أتمكن من فهم الصوت. جرّب مرة أخرى بصوت أوضح.",
         confidence: 0,
         action: null,
         missingFields: ["audio"],
         requiresConfirmation: false,
-        suggestions: ["Try again", "Type the request"],
+        suggestions: ["أعد التسجيل", "اكتب الطلب"],
       },
       action: null,
-      suggestions: ["Try again", "Type the request"],
+      suggestions: ["أعد التسجيل", "اكتب الطلب"],
     };
   }
 

@@ -183,7 +183,7 @@ export class AgentExecutor {
     return {
       ok: false,
       missingFields: zodMissingFields(result.error),
-      message: result.error.issues[0]?.message ?? "Invalid action arguments.",
+      message: result.error.issues[0]?.message ?? "بيانات الإجراء غير مكتملة.",
     };
   }
 
@@ -223,7 +223,7 @@ export class AgentExecutor {
         return {
           executed: false,
           tool: validation.action.tool,
-          message: "Unsupported action.",
+          message: "هذا الإجراء غير مدعوم حالياً.",
         };
     }
   }
@@ -262,7 +262,7 @@ export class AgentExecutor {
       tool: "ui.navigate",
       data: { screen },
       targetScreen: screen,
-      message: `Navigate to ${screen}.`,
+      message: `تم فتح صفحة ${screen}.`,
     };
   }
 
@@ -275,7 +275,7 @@ export class AgentExecutor {
       tool: "transactions.create",
       data: row,
       targetScreen: "expenses",
-      message: "Transaction recorded.",
+      message: "تم تسجيل المعاملة.",
     };
   }
 
@@ -304,7 +304,7 @@ export class AgentExecutor {
       tool: "clients.create",
       data: row,
       targetScreen: "clients",
-      message: "Client created.",
+      message: "تم إنشاء العميل.",
     };
   }
 
@@ -333,7 +333,7 @@ export class AgentExecutor {
   private async executeCreateInvoiceDraft(args: Record<string, unknown>): Promise<AgentActionResult> {
     const parsed = invoiceCreateDraftArgsSchema.parse(args);
     const clientId = parsed.clientId ?? await this.resolveClientId(parsed.clientName);
-    const title = parsed.title ?? (parsed.clientName ? `Invoice for ${parsed.clientName}` : "Voice-created invoice");
+    const title = parsed.title ?? (parsed.clientName ? `فاتورة إلى ${parsed.clientName}` : "فاتورة أنشئت بالصوت");
     const items = parsed.items.length > 0
       ? parsed.items
       : [
@@ -363,7 +363,7 @@ export class AgentExecutor {
       tool: "invoices.create_draft",
       data: row,
       targetScreen: "invoices",
-      message: "Invoice draft created.",
+      message: "تم إنشاء مسودة الفاتورة.",
     };
   }
 
@@ -374,7 +374,7 @@ export class AgentExecutor {
       tool: "invoices.send",
       data: parsed,
       targetScreen: "invoices",
-      message: "Invoice sending is not connected yet. Create or open the draft invoice first.",
+      message: "إرسال الفواتير غير مربوط بالكامل بعد. افتح مسودة الفاتورة أولاً.",
     };
   }
 
@@ -393,7 +393,7 @@ export class AgentExecutor {
         executed: false,
         tool: "invoices.send_reminder",
         targetScreen: "invoices",
-        message: "I found the reminder request, but I need the invoice amount or invoice number to generate it.",
+        message: "فهمت طلب التذكير، لكن أحتاج رقم الفاتورة أو مبلغها لإعداده.",
       };
     }
 
@@ -436,8 +436,8 @@ export class AgentExecutor {
       },
       targetScreen: "invoices",
       message: markedInvoice
-        ? `Payment reminder recorded for invoice ${invoiceNumber}.`
-        : `Payment reminder is ready for invoice ${invoiceNumber}.`,
+        ? `تم تسجيل تذكير الدفع للفاتورة ${invoiceNumber}.`
+        : `تذكير الدفع جاهز للفاتورة ${invoiceNumber}.`,
     };
   }
 
@@ -469,7 +469,7 @@ export class AgentExecutor {
       tool: "reports.generate",
       data: parsed,
       targetScreen: "reports",
-      message: "Report generation needs a dedicated confirmation flow before creating a persisted report.",
+      message: "إنشاء التقرير يحتاج خطوة تأكيد مخصصة قبل حفظه.",
     };
   }
 

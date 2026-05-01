@@ -154,6 +154,7 @@ export type BackendContract = {
   createdAt?: string;
   updatedAt?: string;
   client?: BackendClient | null;
+  flags?: ContractFlag[];
 };
 
 export type BackendZakatRecord = {

@@ -29,7 +29,7 @@ export function VoiceOverlay({
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
-  const [message, setMessage] = useState("Ready");
+  const [message, setMessage] = useState("جاهزة");
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(18).fill(6));
@@ -55,8 +55,8 @@ export function VoiceOverlay({
 
   useEffect(() => {
     if (phase !== "listening") {
-      setWaveHeights(Array(18).fill(6));
-      return;
+      const frame = window.requestAnimationFrame(() => setWaveHeights(Array(18).fill(6)));
+      return () => window.cancelAnimationFrame(frame);
     }
 
     const interval = window.setInterval(() => {
@@ -70,11 +70,11 @@ export function VoiceOverlay({
     setError(null);
     setTranscript("");
     setResult(null);
-    setMessage("Listening...");
+    setMessage("أستمع الآن...");
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setPhase("error");
-      setError("Voice recording is not supported in this browser.");
+      setError("التسجيل الصوتي غير مدعوم في هذا المتصفح.");
       return;
     }
 
@@ -99,7 +99,7 @@ export function VoiceOverlay({
       setPhase("listening");
     } catch (caught) {
       setPhase("error");
-      setError(caught instanceof Error ? caught.message : "Microphone permission was denied.");
+      setError(caught instanceof Error ? caught.message : "تم رفض إذن الميكروفون.");
     }
   }
 
@@ -110,7 +110,7 @@ export function VoiceOverlay({
     }
 
     setPhase("processing");
-    setMessage("Processing...");
+    setMessage("جاري المعالجة...");
     recorder.stop();
   }
 
@@ -120,7 +120,7 @@ export function VoiceOverlay({
 
     if (chunks.length === 0) {
       setPhase("error");
-      setError("No audio was captured.");
+      setError("لم يتم التقاط أي صوت.");
       return;
     }
 
@@ -128,14 +128,14 @@ export function VoiceOverlay({
       const type = chunks[0]?.type || "audio/webm";
       const blob = new Blob(chunks, { type });
       const file = new File([blob], `masraf-command-${Date.now()}.webm`, { type });
-      const response = await masrafApi.voice.process(file, agentContext(), true, historyRef.current);
+      const response = await masrafApi.voice.process(file, agentContext(), true, historyRef.current, "fatima");
       const agent = response.agentResponse;
 
       setTranscript(response.transcript || "");
       setResult(agent ?? null);
-      setMessage(agent?.message ?? response.aiResponse?.message ?? "Done.");
+      setMessage(agent?.message ?? response.aiResponse?.message ?? "تم.");
       setPhase("responding");
-      playTts(response.audioBase64, response.audioContentType);
+      playTts(response.audioBase64, response.audioContentType, agent?.message ?? response.aiResponse?.message);
 
       if (agent) {
         rememberTurn(response.transcript || "", agent.message);
@@ -143,7 +143,7 @@ export function VoiceOverlay({
       }
     } catch (caught) {
       setPhase("error");
-      setError(caught instanceof Error ? caught.message : "Voice command failed.");
+      setError(caught instanceof Error ? caught.message : "فشل الأمر الصوتي.");
     }
   }
 
@@ -154,7 +154,7 @@ export function VoiceOverlay({
     }
 
     setPhase("processing");
-    setMessage(approved ? "Confirming..." : "Cancelling...");
+    setMessage(approved ? "جاري التأكيد..." : "جاري الإلغاء...");
 
     try {
       const confirmed = await masrafApi.agent.command({
@@ -173,7 +173,7 @@ export function VoiceOverlay({
       applyCommandSideEffects(confirmed, approved);
     } catch (caught) {
       setPhase("error");
-      setError(caught instanceof Error ? caught.message : "Could not confirm the action.");
+      setError(caught instanceof Error ? caught.message : "لم أتمكن من تأكيد الإجراء.");
     }
   }
 
@@ -221,28 +221,41 @@ export function VoiceOverlay({
     streamRef.current = null;
   }
 
-  function playTts(base64?: string, contentType?: string) {
+  function speakWithBrowser(text: string) {
+    if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ar-SA";
+    utter.rate = 0.95;
+    const voices = window.speechSynthesis.getVoices();
+    const arVoice = voices.find((v) => v.lang.startsWith("ar"));
+    if (arVoice) utter.voice = arVoice;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+
+  function playTts(base64?: string, contentType?: string, text?: string) {
     if (!base64) {
+      speakWithBrowser(text ?? "");
       return;
     }
 
     audioRef.current?.pause();
     const audio = new Audio(`data:${contentType || "audio/wav"};base64,${base64}`);
     audioRef.current = audio;
-    void audio.play().catch(() => undefined);
+    void audio.play().catch(() => speakWithBrowser(text ?? ""));
   }
 
   const pendingAction = result?.status === "needs_confirmation" ? result.action : null;
   const targetScreen = result?.actionResult?.targetScreen ?? result?.plan.targetScreen;
   const status = phase === "listening"
-    ? "Listening"
+    ? "أستمع"
     : phase === "processing"
-      ? "Working"
+      ? "أعمل على طلبك"
       : phase === "error"
-        ? "Needs attention"
+        ? "يحتاج انتباه"
         : result?.status === "needs_confirmation"
-          ? "Confirm action"
-          : "Masraf agent";
+          ? "تأكيد الإجراء"
+          : "فاطمة · مساعدة مصرف";
   const accent = phase === "responding" ? "#147A41" : phase === "processing" ? "#9C7614" : "#F0C542";
 
   return (
@@ -276,14 +289,14 @@ export function VoiceOverlay({
           <div style={{ padding: "0 16px 16px", display: "grid", gap: 9 }}>
             {transcript && (
               <div style={panelStyle}>
-                <div style={labelStyle}>Transcript</div>
+                <div style={labelStyle}>النص المسموع</div>
                 <div style={{ fontSize: 14, color: "#11100E", fontWeight: 800, lineHeight: 1.55, overflowWrap: "anywhere" }}>{transcript}</div>
               </div>
             )}
 
             {(message || error) && (
               <div style={{ ...panelStyle, background: phase === "error" ? "#FFF3F0" : "#FFFDF8" }}>
-                <div style={labelStyle}>{phase === "error" ? "Error" : "Response"}</div>
+                <div style={labelStyle}>{phase === "error" ? "خطأ" : "الرد"}</div>
                 <div style={{ fontSize: 15, color: phase === "error" ? "#B3261E" : "#11100E", lineHeight: 1.65, fontWeight: 800, overflowWrap: "anywhere" }}>
                   {error || message}
                 </div>
@@ -295,23 +308,23 @@ export function VoiceOverlay({
             <div style={{ display: "flex", gap: 8 }}>
               {phase === "listening" && (
                 <button onClick={stopRecording} style={{ ...primaryButtonStyle, flex: 1 }}>
-                  Stop and send
+                  أوقف وأرسل
                 </button>
               )}
 
               {(phase === "idle" || phase === "error" || phase === "responding") && !pendingAction && (
                 <button onClick={() => void startRecording()} style={{ ...primaryButtonStyle, flex: 1 }}>
-                  Record again
+                  سجّل مرة أخرى
                 </button>
               )}
 
               {pendingAction && (
                 <>
                   <button onClick={() => void confirmAction(true)} style={{ ...primaryButtonStyle, flex: 1 }}>
-                    Confirm
+                    تأكيد
                   </button>
                   <button onClick={() => void confirmAction(false)} style={secondaryButtonStyle}>
-                    Cancel
+                    إلغاء
                   </button>
                 </>
               )}
@@ -335,7 +348,7 @@ function ActionSummary({ action, targetScreen }: { action: AgentAction; targetSc
     <div style={{ background: "#F7F4EE", border: "1px solid #E7DFD2", borderRadius: 16, padding: "11px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
         <div>
-          <div style={labelStyle}>Action</div>
+          <div style={labelStyle}>الإجراء</div>
           <div style={{ fontSize: 14, color: "#11100E", fontWeight: 900 }}>{actionLabel(action.tool)}</div>
         </div>
         <div style={{ width: 38, height: 38, borderRadius: 13, background: "#11100E", color: "#F0C542", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -354,7 +367,7 @@ function ActionSummary({ action, targetScreen }: { action: AgentAction; targetSc
       {targetScreen && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#6D675E", fontSize: 12, fontWeight: 800, marginTop: 9 }}>
           <MasrafIcon icon={LinkSquare02Icon} size={15} color="currentColor" />
-          Opens {targetScreen}
+          يفتح صفحة {targetScreen}
           <MasrafIcon icon={ArrowRight01Icon} size={14} color="currentColor" />
         </div>
       )}
@@ -364,16 +377,16 @@ function ActionSummary({ action, targetScreen }: { action: AgentAction; targetSc
 
 function actionLabel(tool: string) {
   switch (tool) {
-    case "transactions.create": return "Record transaction";
-    case "transactions.list": return "Review transactions";
-    case "clients.create": return "Create client";
-    case "clients.find": return "Find client";
-    case "invoices.create_draft": return "Create invoice draft";
-    case "invoices.send": return "Send invoice";
-    case "invoices.send_reminder": return "Send payment reminder";
-    case "zakat.calculate": return "Calculate zakat";
-    case "reports.generate": return "Generate report";
-    case "ui.navigate": return "Navigate";
+    case "transactions.create": return "تسجيل معاملة";
+    case "transactions.list": return "مراجعة المعاملات";
+    case "clients.create": return "إنشاء عميل";
+    case "clients.find": return "البحث عن عميل";
+    case "invoices.create_draft": return "إنشاء مسودة فاتورة";
+    case "invoices.send": return "إرسال فاتورة";
+    case "invoices.send_reminder": return "إرسال تذكير دفع";
+    case "zakat.calculate": return "حساب الزكاة";
+    case "reports.generate": return "إنشاء تقرير";
+    case "ui.navigate": return "التنقل";
     default: return tool;
   }
 }

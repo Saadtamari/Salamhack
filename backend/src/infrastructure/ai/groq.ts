@@ -97,9 +97,9 @@ export async function groqTextToSpeech(
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: options.model ?? "canopylabs/orpheus-arabic-saudi",
-      input: text,
-      voice: options.voice ?? "abdullah",
+      model: options.model ?? env.GROQ_TTS_MODEL,
+      input: normalizeTTSInput(text),
+      voice: normalizeTTSVoice(options.voice),
       response_format: options.responseFormat ?? "wav",
     }),
   });
@@ -114,6 +114,30 @@ export async function groqTextToSpeech(
     audioBuffer: Buffer.from(arrayBuffer),
     contentType: response.headers.get("content-type") ?? "audio/wav",
   };
+}
+
+function normalizeTTSVoice(voice: string | undefined): string {
+  const normalized = voice?.trim().toLowerCase();
+
+  if (!normalized || ["fatima", "فاطمة", "female", "woman", "aisha", "noura", "lulwa"].includes(normalized)) {
+    return env.GROQ_TTS_VOICE_FEMALE;
+  }
+
+  if (["abdullah", "abdulla", "abdullahai", "عبدالله", "male", "man", "fahad", "sultan"].includes(normalized)) {
+    return env.GROQ_TTS_VOICE_MALE;
+  }
+
+  return voice?.trim() || env.GROQ_TTS_VOICE_FEMALE;
+}
+
+function normalizeTTSInput(text: string): string {
+  const trimmed = text.trim();
+
+  if (trimmed.length <= 200) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, 190).trim()}...`;
 }
 
 export interface GroqVisionOptions {

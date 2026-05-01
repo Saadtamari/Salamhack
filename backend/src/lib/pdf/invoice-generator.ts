@@ -42,7 +42,7 @@ function addEnglishLine(document: PDFKit.PDFDocument, label: string, value: stri
   document.fontSize(9).fillColor("#64748b").text(label, ENGLISH_COLUMN_X, y, {
     width: COLUMN_WIDTH,
   });
-  document.fontSize(11).fillColor("#0f172a").text(value, ENGLISH_COLUMN_X, y + 13, {
+  document.fontSize(11).fillColor("#1b5e20").text(value, ENGLISH_COLUMN_X, y + 13, {
     width: COLUMN_WIDTH,
   });
 }
@@ -52,7 +52,7 @@ function addArabicLine(document: PDFKit.PDFDocument, label: string, value: strin
     width: COLUMN_WIDTH,
     align: "right",
   });
-  document.fontSize(11).fillColor("#0f172a").text(value, ARABIC_COLUMN_X, y + 13, {
+  document.fontSize(11).fillColor("#1b5e20").text(value, ARABIC_COLUMN_X, y + 13, {
     width: COLUMN_WIDTH,
     align: "right",
     features: ["liga", "rlig", "calt"],
@@ -97,7 +97,7 @@ export async function generateInvoicePdfBuffer({ invoice, items }: InvoicePdfInp
     const regularFont = setupFonts(document);
     document.font(regularFont);
 
-    document.rect(0, 0, PAGE_WIDTH, 96).fill("#0f172a");
+    document.rect(0, 0, PAGE_WIDTH, 96).fill("#1b5e20");
     document.fillColor("#ffffff").fontSize(24).text("Masraf Invoice", MARGIN, 28, {
       width: 240,
     });
@@ -123,10 +123,10 @@ export async function generateInvoicePdfBuffer({ invoice, items }: InvoicePdfInp
     addArabicLine(document, "الاستحقاق", invoice.dueDate ? String(invoice.dueDate) : "غير محدد", 288);
 
     document.roundedRect(MARGIN, 350, CONTENT_WIDTH, 1, 0).fill("#e2e8f0");
-    document.fontSize(14).fillColor("#0f172a").text("Items", MARGIN, 370, {
+    document.fontSize(14).fillColor("#1b5e20").text("Items", MARGIN, 370, {
       width: 180,
     });
-    document.fontSize(14).fillColor("#0f172a").text("البنود", ARABIC_COLUMN_X, 370, {
+    document.fontSize(14).fillColor("#1b5e20").text("البنود", ARABIC_COLUMN_X, 370, {
       width: COLUMN_WIDTH,
       align: "right",
       features: ["liga", "rlig", "calt"],
@@ -140,10 +140,10 @@ export async function generateInvoicePdfBuffer({ invoice, items }: InvoicePdfInp
       document.fontSize(10).fillColor("#64748b").text(`#${index + 1}`, MARGIN + 10, rowY, {
         width: 30,
       });
-      document.fontSize(11).fillColor("#0f172a").text(item.description, MARGIN + 45, rowY, {
+      document.fontSize(11).fillColor("#1b5e20").text(item.description, MARGIN + 45, rowY, {
         width: 160,
       });
-      document.fontSize(11).fillColor("#0f172a").text(item.descriptionAr ?? item.description, ARABIC_COLUMN_X, rowY, {
+      document.fontSize(11).fillColor("#1b5e20").text(item.descriptionAr ?? item.description, ARABIC_COLUMN_X, rowY, {
         width: COLUMN_WIDTH,
         align: "right",
         features: ["liga", "rlig", "calt"],
@@ -154,7 +154,7 @@ export async function generateInvoicePdfBuffer({ invoice, items }: InvoicePdfInp
       document.text(`Unit ${item.unitPrice}`, MARGIN + 125, rowY + 20, {
         width: 90,
       });
-      document.fontSize(10).fillColor("#0f172a").text(money(item.total, invoice.currency), MARGIN + 390, rowY + 20, {
+      document.fontSize(10).fillColor("#1b5e20").text(money(item.total, invoice.currency), MARGIN + 390, rowY + 20, {
         width: 100,
         align: "right",
       });

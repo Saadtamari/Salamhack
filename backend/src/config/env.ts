@@ -16,6 +16,9 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
   GROQ_CHAT_MODEL: z.string().min(1).default("openai/gpt-oss-120b"),
   GROQ_VISION_MODEL: z.string().min(1).default("meta-llama/llama-4-scout-17b-16e-instruct"),
+  GROQ_TTS_MODEL: z.string().min(1).default("canopylabs/orpheus-arabic-saudi"),
+  GROQ_TTS_VOICE_MALE: z.string().min(1).default("abdullah"),
+  GROQ_TTS_VOICE_FEMALE: z.string().min(1).default("aisha"),
 });
 
 const parsed = envSchema.safeParse(process.env);

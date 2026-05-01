@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { logout as authLogout } from "@/lib/auth";
 import {
   Alert02Icon,
@@ -19,12 +19,28 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { MASRAF_DATA } from "@/lib/data";
+import { apiConfig, masrafApi } from "@/lib/api";
+import type { BackendContract, ContractFlag } from "@/lib/api";
 import { fmt, IslamicPattern, Avatar, StatusBadge, RiskBadge, MiniChart, DonutChart, RunwayIndicator, HalalBadge, EmptyState } from "./ui";
 import { MasrafIcon } from "./icons";
 import { InvoicePreviewModal, ChaserModal, ReceiptScanner, PurificationLedger } from "./Modals";
 import type { Invoice } from "@/lib/data";
 
 const DD = MASRAF_DATA;
+type DesktopContractFlag = {
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description: string;
+  recommendation: string;
+  clause?: string;
+};
+type DesktopContractCard = Omit<typeof DD.contracts[number], "id"> & {
+  id: string | number;
+  backendId?: string;
+  analysisFlags?: DesktopContractFlag[];
+  summary?: string;
+  riskLevel?: string;
+};
 
 // ─── Desktop Dashboard ────────────────────────────────────────────────────────
 export function DesktopDashboard({ onNavigate, toast }: {
@@ -137,22 +153,85 @@ export function DesktopDashboard({ onNavigate, toast }: {
 }
 
 // ─── Desktop Invoices ─────────────────────────────────────────────────────────
+type InvoiceExtended = Invoice & { description?: string; backendId?: string };
+
 export function DesktopInvoices({ toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
-  const [filter, setFilter]       = useState("all");
-  const [previewInv, setPreviewInv] = useState<Invoice | null>(null);
+  const [filter, setFilter]         = useState("all");
+  const [previewInv, setPreviewInv] = useState<InvoiceExtended | null>(null);
   const [chaserInv,  setChaserInv]  = useState<Invoice | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [creating,   setCreating]   = useState(false);
+  const [localInvoices, setLocalInvoices] = useState<InvoiceExtended[]>([]);
+  const [form, setForm] = useState({ client: DD.clients[0]?.name ?? "", description: "", amount: "", terms: "٣٠ يوم" });
 
-  const filtered = filter === "all" ? DD.invoices : DD.invoices.filter((i) => i.status === filter);
+  const allInvoices: InvoiceExtended[] = [...localInvoices, ...DD.invoices];
+  const filtered = filter === "all" ? allInvoices : allInvoices.filter((i) => i.status === filter);
+
+  async function handleCreate() {
+    const amount = Number(form.amount);
+    if (!form.client || !(amount > 0)) {
+      toast?.("يرجى إدخال اسم العميل والمبلغ", "error", "بيانات ناقصة");
+      return;
+    }
+    setCreating(true);
+    const today = new Date();
+    const dueDate = new Date(today);
+    dueDate.setDate(dueDate.getDate() + (form.terms === "١٥ يوم" ? 15 : 30));
+    const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const dueDateStr = `${dueDate.getDate()} ${AR_MONTHS[dueDate.getMonth()]} ${dueDate.getFullYear()}`;
+    const id = `INV-${today.getFullYear()}-${String(today.getTime()).slice(-4)}`;
+
+    const newInv: InvoiceExtended = {
+      id,
+      client: form.client,
+      clientEn: form.client,
+      amount,
+      status: "draft",
+      due: dueDateStr,
+      daysOverdue: 0,
+      description: form.description || "خدمات مهنية",
+    };
+
+    if (apiConfig.useBackend) {
+      try {
+        const subtotal = Math.round((amount / 1.16) * 100) / 100;
+        const vatAmount = Math.round((amount - subtotal) * 100) / 100;
+        const result = await masrafApi.invoices.create({
+          title: form.description || "Invoice",
+          titleAr: form.description || "فاتورة",
+          subtotal,
+          vatAmount,
+          total: amount,
+          currency: DD.user.currency,
+          paymentTerms: form.terms === "مرابحة" ? "murabaha" : form.terms === "١٥ يوم" ? "net_15" : "net_30",
+          dueDate: dueDate.toISOString().split("T")[0],
+          status: "draft",
+          items: [{ description: form.description || "Professional services", descriptionAr: form.description || "خدمات مهنية", quantity: 1, unitPrice: subtotal, total: subtotal }],
+        });
+        newInv.backendId = result.id;
+        newInv.id = result.invoiceNumber || id;
+      } catch {
+        // backend failed — keep local invoice
+      }
+    }
+
+    setLocalInvoices((prev) => [newInv, ...prev]);
+    setForm({ client: DD.clients[0]?.name ?? "", description: "", amount: "", terms: "٣٠ يوم" });
+    setShowCreate(false);
+    setCreating(false);
+    toast?.("تم إنشاء الفاتورة بنجاح", "success", "فاتورة جديدة");
+  }
+
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8", boxSizing: "border-box" };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#11100E" }}>الفواتير</div>
-          <div style={{ fontSize: 13, color: "#92897C", marginTop: 2 }}>{DD.invoices.length} فاتورة · {fmt(DD.stats.pending)} معلقة</div>
+          <div style={{ fontSize: 13, color: "#92897C", marginTop: 2 }}>{allInvoices.length} فاتورة · {fmt(DD.stats.pending)} معلقة</div>
         </div>
         <button onClick={() => setShowCreate(true)} style={{ background: "#1B5E20", color: "white", border: "none", borderRadius: 14, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>
           + فاتورة جديدة
@@ -213,24 +292,37 @@ export function DesktopInvoices({ toast }: {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#FFFDF8", borderRadius: 24, padding: "28px", width: 480, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: "#11100E", marginBottom: 20 }}>فاتورة جديدة</div>
-            {["العميل", "وصف الخدمة", "المبلغ (USD)", "شروط الدفع"].map((f) => (
-              <div key={f} style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>{f}</label>
-                {f === "العميل" ? (
-                  <select style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8" }}>
-                    {DD.clients.map((c) => <option key={c.id}>{c.name}</option>)}
-                  </select>
-                ) : f === "شروط الدفع" ? (
-                  <select style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8" }}>
-                    <option>٣٠ يوم</option><option>١٥ يوم</option><option>مرابحة</option>
-                  </select>
-                ) : (
-                  <input placeholder={f === "المبلغ (USD)" ? "0" : ""} style={{ width: "100%", padding: "11px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic", direction: "rtl", background: "#FAFAF8", boxSizing: "border-box" }} />
-                )}
-              </div>
-            ))}
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>العميل</label>
+              <select value={form.client} onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} style={inputStyle}>
+                {DD.clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>وصف الخدمة</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="مثال: تصميم هوية بصرية" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>المبلغ ({DD.user.currency})</label>
+              <input type="number" min="0" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>شروط الدفع</label>
+              <select value={form.terms} onChange={(e) => setForm((f) => ({ ...f, terms: e.target.value }))} style={inputStyle}>
+                <option value="٣٠ يوم">٣٠ يوم</option>
+                <option value="١٥ يوم">١٥ يوم</option>
+                <option value="مرابحة">مرابحة</option>
+              </select>
+            </div>
+
             <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={() => { setShowCreate(false); toast?.("تم إنشاء الفاتورة بنجاح", "success", "فاتورة جديدة"); }} style={{ flex: 2, background: "#11100E", color: "white", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إنشاء الفاتورة</button>
+              <button onClick={() => void handleCreate()} disabled={creating} style={{ flex: 2, background: creating ? "#DDD6CA" : "#11100E", color: creating ? "#92897C" : "white", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer", fontFamily: "IBM Plex Sans Arabic" }}>
+                {creating ? "جاري الإنشاء..." : "✓ إنشاء الفاتورة"}
+              </button>
               <button onClick={() => setShowCreate(false)} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 14, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>إلغاء</button>
             </div>
           </div>
@@ -445,10 +537,167 @@ export function DesktopZakat({ toast }: {
 }
 
 // ─── Desktop Contracts ────────────────────────────────────────────────────────
+function numberFromApi(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function cleanContractTitle(fileName: string) {
+  return fileName.replace(/\.[^.]+$/i, "").replace(/[_-]+/g, " ").trim() || "عقد جديد";
+}
+
+function contractSeverityLabel(severity: DesktopContractFlag["severity"]) {
+  if (severity === "critical") return "حرج";
+  if (severity === "warning") return "تحذير";
+  return "معلومة";
+}
+
+function contractSeverityStyle(severity: DesktopContractFlag["severity"]) {
+  if (severity === "critical") return { bg: "#FFEBEE", fg: "#B71C1C" };
+  if (severity === "warning") return { bg: "#FFF3E0", fg: "#E65100" };
+  return { bg: "#E8F5E9", fg: "#1B5E20" };
+}
+
+function backendFlagToDesktop(flag: ContractFlag, index: number): DesktopContractFlag {
+  return {
+    severity: flag.severity ?? "info",
+    title: flag.titleAr || flag.title || `ملاحظة ${index + 1}`,
+    description: flag.descriptionAr || flag.description || "لا يوجد وصف إضافي.",
+    recommendation: flag.recommendationAr || flag.recommendation || "راجع هذا البند قبل التوقيع.",
+    clause: flag.clauseReference,
+  };
+}
+
+function backendContractToDesktop(contract: BackendContract): DesktopContractCard {
+  const resultFlags = Array.isArray(contract.analysisResult?.flags)
+    ? contract.analysisResult.flags.map(backendFlagToDesktop)
+    : [];
+  const rowFlags = Array.isArray(contract.flags) ? contract.flags.map(backendFlagToDesktop) : [];
+  const analysisFlags = rowFlags.length > 0 ? rowFlags : resultFlags;
+  const criticalFlags = analysisFlags.filter((flag) => flag.severity === "critical").length;
+
+  return {
+    id: contract.id,
+    backendId: contract.id,
+    title: contract.titleAr || contract.title,
+    client: contract.client?.nameAr || contract.client?.name || "عميل",
+    date: contract.createdAt ? new Date(contract.createdAt).toLocaleDateString("ar-SA") : new Date().toLocaleDateString("ar-SA"),
+    amount: numberFromApi(contract.paymentAmount),
+    criticalFlags,
+    flagsCount: analysisFlags.length,
+    status: contract.analysisStatus === "completed" ? "analyzed" : "pending",
+    analysisFlags,
+    summary: contract.analysisResult?.summaryAr || contract.analysisResult?.summary,
+    riskLevel: contract.analysisResult?.riskLevel,
+  };
+}
+
+function fallbackContractFlags(contract: DesktopContractCard): DesktopContractFlag[] {
+  if (contract.analysisFlags?.length) {
+    return contract.analysisFlags;
+  }
+
+  if (contract.status === "pending") {
+    return [{
+      severity: "info",
+      title: "التحليل قيد الانتظار",
+      description: "هذا العقد لم يكتمل تحليله بعد.",
+      recommendation: "ارفع العقد مرة أخرى أو انتظر اكتمال التحليل من الخلفية.",
+    }];
+  }
+
+  if (contract.criticalFlags > 0) {
+    return DD.contractFlags.map((flag) => ({
+      severity: flag.severity as DesktopContractFlag["severity"],
+      title: flag.title,
+      description: flag.desc,
+      recommendation: flag.recommendation,
+      clause: flag.clause,
+    }));
+  }
+
+  return [{
+    severity: "info",
+    title: "لا توجد مخاطر حرجة",
+    description: "لم تظهر لهذا العقد بنود حرجة في التحليل الحالي.",
+    recommendation: "راجع البنود الرئيسية يدوياً قبل التوقيع النهائي.",
+  }];
+}
+
 export function DesktopContracts({ toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
-  const [selected, setSelected] = useState<typeof DD.contracts[0] | null>(null);
+  const [selected, setSelected] = useState<DesktopContractCard | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [uploadedContracts, setUploadedContracts] = useState<DesktopContractCard[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const allContracts: DesktopContractCard[] = [...uploadedContracts, ...DD.contracts];
+
+  async function handleContractFile(file: File) {
+    setAnalyzing(true);
+    toast?.(`جاري تحليل "${file.name}" بالذكاء الاصطناعي...`, "info", "رفع عقد");
+    try {
+      let newContract: DesktopContractCard;
+
+      if (apiConfig.useBackend) {
+        const uploaded = await masrafApi.contracts.upload({
+          file,
+          title: cleanContractTitle(file.name),
+          titleAr: cleanContractTitle(file.name),
+        });
+        newContract = backendContractToDesktop(uploaded);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        newContract = {
+          id: `CNT-${Date.now()}`,
+          title: cleanContractTitle(file.name),
+          client: "عميل",
+          date: new Date().toLocaleDateString("ar-SA"),
+          amount: 0,
+          criticalFlags: 0,
+          flagsCount: 1,
+          status: "analyzed",
+          analysisFlags: [{
+            severity: "info",
+            title: "تحليل تجريبي مكتمل",
+            description: "تم تجهيز العقد للعرض. فعّل الخلفية للحصول على تحليل حقيقي من الذكاء الاصطناعي.",
+            recommendation: "اربط الخلفية ثم أعد رفع الملف للحصول على البنود المستخرجة من العقد نفسه.",
+          }],
+          summary: "تم رفع العقد في وضع العرض التجريبي.",
+          riskLevel: "low",
+        };
+      }
+
+      setUploadedContracts((prev) => [newContract, ...prev]);
+      setSelected(newContract);
+      const critical = newContract.criticalFlags > 0 ? ` — ${newContract.criticalFlags} بند حرج` : "";
+      toast?.(`تم تحليل العقد${critical}`, "success", "تحليل العقد");
+    } catch (error) {
+      const failedContract: DesktopContractCard = {
+        id: `CNT-${Date.now()}`,
+        title: cleanContractTitle(file.name),
+        client: "عميل",
+        date: new Date().toLocaleDateString("ar-SA"),
+        amount: 0,
+        criticalFlags: 0,
+        flagsCount: 1,
+        status: "pending",
+        analysisFlags: [{
+          severity: "warning",
+          title: "تعذر تحليل العقد من الخلفية",
+          description: error instanceof Error ? error.message : "حدث خطأ أثناء رفع العقد أو تحليله.",
+          recommendation: "تحقق من تشغيل الخلفية ومفاتيح الذكاء الاصطناعي ثم أعد رفع الملف.",
+        }],
+        summary: "لم يكتمل التحليل.",
+        riskLevel: "medium",
+      };
+      setUploadedContracts((prev) => [failedContract, ...prev]);
+      setSelected(failedContract);
+      toast?.("تعذر تحليل العقد من الخلفية", "error", "تحليل العقد");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   return (
     <div>
@@ -456,16 +705,31 @@ export function DesktopContracts({ toast }: {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 20 }}>
         <div>
           {/* Upload area */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleContractFile(file);
+              e.target.value = "";
+            }}
+          />
           <div
-            style={{ background: "#F3E5F5", border: "2px dashed #7B1FA2", borderRadius: 16, padding: "24px", textAlign: "center", marginBottom: 20, cursor: "pointer" }}
-            onClick={() => toast?.("يرجى رفع ملف PDF", "info", "رفع عقد")}
+            style={{ background: analyzing ? "#EDE7F6" : "#F3E5F5", border: `2px dashed ${analyzing ? "#4527A0" : "#7B1FA2"}`, borderRadius: 16, padding: "24px", textAlign: "center", marginBottom: 20, cursor: analyzing ? "wait" : "pointer", transition: "all 0.2s" }}
+            onClick={() => !analyzing && fileInputRef.current?.click()}
           >
-            <div style={{ fontSize: 36 }}>📎</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>ارفع عقداً للتحليل</div>
-            <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً</div>
+            <div style={{ fontSize: 36 }}>{analyzing ? "⏳" : "📎"}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>
+              {analyzing ? "جاري تحليل العقد..." : "ارفع عقداً للتحليل"}
+            </div>
+            <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>
+              {analyzing ? "يُحلّل الذكاء الاصطناعي البنود الخطرة..." : "اضغط لاختيار ملف PDF · يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً"}
+            </div>
           </div>
 
-          {DD.contracts.map((c) => (
+          {allContracts.map((c) => (
             <div key={c.id} onClick={() => setSelected(selected?.id === c.id ? null : c)}
               style={{ background: "#FFFDF8", borderRadius: 16, padding: "18px 20px", marginBottom: 12, border: `2px solid ${selected?.id === c.id ? "#7B1FA2" : "#DDD6CA"}`, cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -492,19 +756,28 @@ export function DesktopContracts({ toast }: {
           {selected ? (
             <div style={{ background: "#FFFDF8", borderRadius: 20, padding: "24px", border: "1px solid #DDD6CA" }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: "#11100E", marginBottom: 20 }}>نتائج التحليل</div>
-              {DD.contractFlags.map((f, i) => (
-                <div key={i} style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
-                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: f.severity === "critical" ? "#FFEBEE" : "#FFF3E0", color: f.severity === "critical" ? "#B71C1C" : "#E65100", fontWeight: 800 }}>
-                    {f.severity === "critical" ? "حرج" : "تحذير"}
-                  </span>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#11100E", margin: "8px 0 6px" }}>{f.title}</div>
-                  <div style={{ fontSize: 12, color: "#6D675E", marginBottom: 10 }}>{f.desc}</div>
-                  <div style={{ background: "#F0F7F0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#1B5E20", display: "flex", alignItems: "center", gap: 8 }}>
-                    <MasrafIcon icon={InformationCircleIcon} size={15} color="#1B5E20" />
-                    {f.recommendation}
-                  </div>
+              {selected.summary && (
+                <div style={{ background: "#F0F7F0", border: "1px solid #C8E6C9", borderRadius: 14, padding: "13px 14px", fontSize: 12, color: "#1B5E20", lineHeight: 1.8, marginBottom: 14 }}>
+                  {selected.summary}
                 </div>
-              ))}
+              )}
+              {fallbackContractFlags(selected).map((f, i) => {
+                const color = contractSeverityStyle(f.severity);
+                return (
+                  <div key={`${f.title}-${i}`} style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
+                    <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: color.bg, color: color.fg, fontWeight: 800 }}>
+                      {contractSeverityLabel(f.severity)}
+                    </span>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#11100E", margin: "8px 0 6px" }}>{f.title}</div>
+                    {f.clause && <div style={{ fontSize: 11, color: "#92897C", marginBottom: 6 }}>البند: {f.clause}</div>}
+                    <div style={{ fontSize: 12, color: "#6D675E", marginBottom: 10, lineHeight: 1.7 }}>{f.description}</div>
+                    <div style={{ background: "#F0F7F0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#1B5E20", display: "flex", alignItems: "center", gap: 8, lineHeight: 1.6 }}>
+                      <MasrafIcon icon={InformationCircleIcon} size={15} color="#1B5E20" />
+                      {f.recommendation}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div style={{ background: "#FFFDF8", borderRadius: 20, padding: "24px", border: "1px solid #DDD6CA", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
@@ -518,6 +791,76 @@ export function DesktopContracts({ toast }: {
 }
 
 // ─── Desktop Reports ──────────────────────────────────────────────────────────
+function downloadReportPdf(toast?: (msg: string, type?: string) => void) {
+  const win = window.open("", "_blank", "width=820,height=1000");
+  if (!win) {
+    toast?.("يرجى السماح بالنوافذ المنبثقة لتنزيل التقرير", "error");
+    return;
+  }
+  const fmtN = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
+  const net = DD.stats.totalIncome - DD.stats.totalExpenses;
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>تقرير أبريل ٢٠٢٦ — مصرف</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;background:#FAFAF8;color:#2A2520;padding:32px 24px}
+.wrap{max-width:720px;margin:0 auto}
+.print-btn{display:block;width:100%;padding:12px;background:#1B5E20;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:20px;font-family:inherit}
+.header{background:linear-gradient(135deg,#1B5E20,#0D3B0F);border-radius:18px;padding:28px 32px;color:white;margin-bottom:24px}
+.header h1{font-size:28px;font-weight:900;margin-bottom:4px}
+.header p{font-size:14px;opacity:0.75}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:white;border:1px solid #E8DFCF;border-radius:14px;padding:18px 20px}
+.kpi-label{font-size:11px;color:#92897C;margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:900;color:#11100E}
+.kpi-delta{font-size:12px;font-weight:700;margin-top:4px}
+.section{background:white;border:1px solid #E8DFCF;border-radius:18px;padding:24px;margin-bottom:18px}
+.section h2{font-size:15px;font-weight:800;color:#11100E;margin-bottom:16px}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F4EDE0;font-size:14px}
+.row:last-child{border-bottom:none}
+.grand{border-top:2px solid #1B5E20;margin-top:8px;padding-top:12px;display:flex;justify-content:space-between;font-size:16px;font-weight:800}
+.ai-box{background:#F0F7F0;border:1px solid #C8E6C9;border-radius:14px;padding:16px;font-size:13px;color:#1B5E20;line-height:1.8}
+.footer{text-align:center;margin-top:24px;font-size:11px;color:#B8AC97;letter-spacing:1.5px;text-transform:uppercase}
+@media print{.print-btn{display:none}body{padding:0}@page{margin:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<button class="print-btn" onclick="window.print()">طباعة / حفظ كـ PDF ↓</button>
+<div class="header">
+  <h1>تقرير أبريل ٢٠٢٦</h1>
+  <p>مصرف — التقرير المالي الشهري · أحمد الشمري</p>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">إجمالي الدخل</div><div class="kpi-value">${fmtN(DD.stats.totalIncome)}</div><div class="kpi-delta" style="color:#1B5E20">+67%</div></div>
+  <div class="kpi"><div class="kpi-label">إجمالي المصاريف</div><div class="kpi-value">${fmtN(DD.stats.totalExpenses)}</div><div class="kpi-delta" style="color:#B3261E">+8%</div></div>
+  <div class="kpi"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${fmtN(net)}</div><div class="kpi-delta" style="color:#1B5E20">+82%</div></div>
+  <div class="kpi"><div class="kpi-label">فواتير مدفوعة</div><div class="kpi-value">٢</div><div class="kpi-delta" style="color:#9C7614">من ٦</div></div>
+</div>
+<div class="section">
+  <h2>الملخص المالي</h2>
+  <div class="row"><span style="color:#6D675E">إجمالي الدخل</span><span style="font-weight:700">${fmtN(DD.stats.totalIncome)} USD</span></div>
+  <div class="row"><span style="color:#6D675E">إجمالي المصاريف</span><span style="font-weight:700">${fmtN(DD.stats.totalExpenses)} USD</span></div>
+  <div class="row"><span style="color:#6D675E">فواتير معلقة</span><span style="font-weight:700">${fmtN(DD.stats.pending)} USD</span></div>
+  <div class="grand"><span>صافي الربح</span><span style="color:#1B5E20">${fmtN(net)} USD</span></div>
+</div>
+<div class="section">
+  <h2>ملخص الذكاء الاصطناعي</h2>
+  <div class="ai-box">أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك ارتفع <strong>٦٧٪</strong> مقارنة بمارس وهو أعلى مستوى في ٦ أشهر. لديك <strong>عميلان</strong> يحتاجان متابعة تحصيل عاجلة. مصاريفك في حدود معقولة (<strong>٣١٪</strong> من الدخل).</div>
+</div>
+<div class="footer">مصرف · Masraf · تقرير أبريل ٢٠٢٦ · Sharia-Compliant</div>
+</div>
+</body>
+</html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 450);
+}
+
 export function DesktopReports({ toast }: {
   toast?: (msg: string, type?: string) => void;
 }) {
@@ -525,7 +868,7 @@ export function DesktopReports({ toast }: {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 900, color: "#11100E" }}>التقارير</div>
-        <button onClick={() => toast?.("جاري تنزيل تقرير أبريل PDF...", "success")} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => downloadReportPdf(toast)} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
           <MasrafIcon icon={Download01Icon} size={17} color="currentColor" />
           تنزيل PDF
         </button>

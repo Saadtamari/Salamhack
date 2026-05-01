@@ -29,7 +29,7 @@ export class AgentService {
     }
 
     if (!input.message) {
-      result = this.emptyResult("Tell me what you want Masraf to do.");
+      result = this.emptyResult("قل لي ماذا تريد من مصرف أن يفعل.");
       this.remember(conversationId, input, result);
       return result;
     }
@@ -67,7 +67,7 @@ export class AgentService {
 
       result = {
         status: "needs_clarification",
-        message: plan.response || `I need: ${validation.missingFields.join(", ")}.`,
+        message: plan.response || `أحتاج إلى: ${validation.missingFields.join(", ")}.`,
         messageEn: plan.responseEn,
         plan: clarifiedPlan,
         action: null,
@@ -174,20 +174,20 @@ export class AgentService {
     } catch (error) {
       console.warn("[agent] Planning failed:", error instanceof Error ? error.message : error);
       return {
-        response: "The AI planner is unavailable right now. Try again in a moment.",
+        response: "مخطط الذكاء الاصطناعي غير متاح الآن. جرّب مرة أخرى بعد لحظة.",
         responseEn: "The AI planner is unavailable right now.",
         confidence: 0,
         action: null,
         missingFields: [],
         requiresConfirmation: false,
-        suggestions: ["Try again", "Open dashboard"],
+        suggestions: ["أعد المحاولة", "افتح لوحة التحكم"],
       };
     }
   }
 
   private async handleConfirmation(approved: boolean, action: AgentAction): Promise<AgentRunResult> {
     const basePlan: AgentPlan = {
-      response: approved ? "Confirmed." : "Cancelled.",
+      response: approved ? "تم التأكيد." : "تم الإلغاء.",
       confidence: 1,
       action,
       missingFields: [],
@@ -198,7 +198,7 @@ export class AgentService {
     if (!approved) {
       return {
         status: "rejected",
-        message: "Cancelled.",
+        message: "تم الإلغاء.",
         plan: basePlan,
         action,
         suggestions: [],
@@ -208,7 +208,7 @@ export class AgentService {
     const actionResult = await this.executor.execute(action);
     return {
       status: actionResult.executed ? "executed" : "failed",
-      message: actionResult.message ?? (actionResult.executed ? "Done." : "Could not complete that action."),
+      message: actionResult.message ?? (actionResult.executed ? "تم التنفيذ." : "لم أتمكن من إكمال هذا الإجراء."),
       plan: basePlan,
       action,
       actionResult,
@@ -222,13 +222,13 @@ export class AgentService {
     } catch (error) {
       console.warn("[agent] Invalid plan JSON:", error instanceof Error ? error.message : error);
       return {
-        response: "I could not safely understand that command. Please say it again with the amount, client, or action clearly.",
+        response: "لم أفهم الأمر بشكل آمن. أعد قوله مع توضيح المبلغ أو العميل أو الإجراء.",
         responseEn: "I could not safely understand that command.",
         confidence: 0,
         action: null,
         missingFields: ["command"],
         requiresConfirmation: false,
-        suggestions: ["Try again", "Open dashboard"],
+        suggestions: ["أعد المحاولة", "افتح لوحة التحكم"],
       };
     }
   }
@@ -290,19 +290,19 @@ export class AgentService {
   private buildConfirmationText(action: AgentAction): string {
     switch (action.tool) {
       case "transactions.create":
-        return "I found a transaction to record. Confirm?";
+        return "وجدت معاملة لتسجيلها. هل تؤكد؟";
       case "clients.create":
-        return "I found a new client to create. Confirm?";
+        return "وجدت عميلاً جديداً لإنشائه. هل تؤكد؟";
       case "invoices.create_draft":
-        return "I found an invoice draft to create. Confirm?";
+        return "وجدت مسودة فاتورة لإنشائها. هل تؤكد؟";
       case "invoices.send":
-        return "I found an invoice send action. Confirm?";
+        return "وجدت إجراء إرسال فاتورة. هل تؤكد؟";
       case "invoices.send_reminder":
-        return "I found a payment reminder to send. Confirm?";
+        return "وجدت تذكير دفع لإرساله. هل تؤكد؟";
       case "reports.generate":
-        return "I found a report to generate. Confirm?";
+        return "وجدت تقريراً لإنشائه. هل تؤكد؟";
       default:
-        return "Confirm this action?";
+        return "هل تؤكد هذا الإجراء؟";
     }
   }
 
@@ -326,6 +326,14 @@ export class AgentService {
       "doit",
       "sendit",
       "goahead",
+      "\u0646\u0639\u0645",
+      "\u0627\u064A",
+      "\u0623\u064A\u0648\u0647",
+      "\u062A\u0645\u0627\u0645",
+      "\u0623\u0643\u062F",
+      "\u0627\u0631\u0633\u0644",
+      "\u0623\u0631\u0633\u0644",
+      "\u0627\u0628\u0639\u062B",
       "نعم",
       "اي",
       "أيوه",
@@ -344,6 +352,12 @@ export class AgentService {
       "cancel",
       "stop",
       "reject",
+      "\u0644\u0627",
+      "\u0644\u0623",
+      "\u0625\u0644\u063A\u0627\u0621",
+      "\u0627\u0644\u063A\u0627\u0621",
+      "\u0648\u0642\u0641",
+      "\u0627\u0648\u0642\u0641",
       "لا",
       "لأ",
       "الغاء",

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { AppError } from "../../shared/errors/app-error.js";
 import type { TransactionsService } from "./transactions.service.js";
 
 const transactionTypeSchema = z.enum(["income", "expense"]);
@@ -38,6 +39,15 @@ const listTransactionsQuerySchema = z.object({
   to: z.string().date().optional(),
 });
 
+const scanReceiptBodySchema = z.object({
+  autoCreate: z.coerce.boolean().optional(),
+  auto_create: z.coerce.boolean().optional(),
+  fallbackCurrency: z.string().trim().min(1).optional(),
+  fallback_currency: z.string().trim().min(1).optional(),
+  fallbackDate: z.string().date().optional(),
+  fallback_date: z.string().date().optional(),
+});
+
 export class TransactionsController {
   constructor(private readonly service: TransactionsService) {}
 
@@ -60,5 +70,35 @@ export class TransactionsController {
       success: true,
       data: transaction,
     });
+  }
+
+  async scanReceipt(request: Request, response: Response): Promise<void> {
+    const file = this.getUploadedReceipt(request);
+    const body = scanReceiptBodySchema.parse(request.body);
+    const result = await this.service.scanReceipt(file, {
+      autoCreate: body.autoCreate ?? body.auto_create,
+      fallbackCurrency: body.fallbackCurrency ?? body.fallback_currency,
+      fallbackDate: body.fallbackDate ?? body.fallback_date,
+    });
+
+    response.status(result.createdTransaction ? 201 : 200).json({
+      success: true,
+      data: result,
+    });
+  }
+
+  private getUploadedReceipt(request: Request): Express.Multer.File {
+    if (request.file) {
+      return request.file;
+    }
+
+    const files = request.files as Record<string, Express.Multer.File[]> | undefined;
+    const file = files?.image?.[0] ?? files?.receipt?.[0] ?? files?.file?.[0];
+
+    if (!file) {
+      throw new AppError("receipt image is required", 400);
+    }
+
+    return file;
   }
 }

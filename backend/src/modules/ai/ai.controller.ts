@@ -19,6 +19,8 @@ const chatBodySchema = z.object({
       }),
     )
     .optional(),
+  executeAction: z.coerce.boolean().optional(),
+  execute_action: z.coerce.boolean().optional(),
 });
 
 const chaserBodySchema = z.object({
@@ -49,6 +51,7 @@ export class AIController {
       message: body.message,
       context: body.context,
       history: body.history,
+      executeAction: body.executeAction ?? body.execute_action,
     });
 
     response.json({
@@ -59,13 +62,34 @@ export class AIController {
 
   async generateChaser(request: Request, response: Response): Promise<void> {
     const body = chaserBodySchema.parse(request.body);
+    const clientName = body.clientName ?? body.client_name;
+    const invoiceNumber = body.invoiceNumber ?? body.invoice_number;
+    const daysOverdue = body.daysOverdue ?? body.days_overdue;
+    const dueDate = body.dueDate ?? body.due_date;
+
+    if (!clientName) {
+      throw new AppError("clientName or client_name is required", 400);
+    }
+
+    if (!invoiceNumber) {
+      throw new AppError("invoiceNumber or invoice_number is required", 400);
+    }
+
+    if (daysOverdue === undefined) {
+      throw new AppError("daysOverdue or days_overdue is required", 400);
+    }
+
+    if (!dueDate) {
+      throw new AppError("dueDate or due_date is required", 400);
+    }
+
     const result = await this.service.generateChaser({
-      clientName: body.clientName ?? body.client_name!,
-      invoiceNumber: body.invoiceNumber ?? body.invoice_number!,
+      clientName,
+      invoiceNumber,
       amount: body.amount,
       currency: body.currency,
-      daysOverdue: body.daysOverdue ?? body.days_overdue!,
-      dueDate: body.dueDate ?? body.due_date!,
+      daysOverdue,
+      dueDate,
     });
 
     response.json({
@@ -76,8 +100,14 @@ export class AIController {
 
   async analyzeContract(request: Request, response: Response): Promise<void> {
     const body = contractAnalysisBodySchema.parse(request.body);
+    const contractText = body.contractText ?? body.contract_text;
+
+    if (!contractText) {
+      throw new AppError("contractText or contract_text is required", 400);
+    }
+
     const result = await this.service.analyzeContract({
-      contractText: body.contractText ?? body.contract_text!,
+      contractText,
       title: body.title,
     });
 

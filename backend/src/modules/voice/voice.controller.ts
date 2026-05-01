@@ -3,18 +3,14 @@ import { z } from "zod";
 import { AppError } from "../../shared/errors/app-error.js";
 import type { VoiceService } from "./voice.service.js";
 
-const processBodySchema = z.object({
-  context: z
-    .object({
-      screen: z.string().optional(),
-      data: z.record(z.string(), z.unknown()).optional(),
-    })
-    .optional(),
-});
-
 const synthesizeBodySchema = z.object({
   text: z.string().trim().min(1, "text is required"),
   voice: z.string().trim().optional(),
+});
+
+const voiceContextSchema = z.object({
+  screen: z.string().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export class VoiceController {
@@ -47,19 +43,21 @@ export class VoiceController {
       throw new AppError("Audio file is required", 400);
     }
 
-    const body = processBodySchema.parse(request.body);
+    let context: z.infer<typeof voiceContextSchema> | undefined;
+    const rawContext = request.body?.context;
+    const executeAction = request.body?.executeAction === "true" || request.body?.execute_action === "true";
 
-    // Parse context from form data if sent as JSON string
-    let context = body.context;
-    if (!context && typeof request.body?.context === "string") {
+    if (typeof rawContext === "string" && rawContext.trim().length > 0) {
       try {
-        context = JSON.parse(request.body.context);
+        context = voiceContextSchema.parse(JSON.parse(rawContext));
       } catch {
         // ignore invalid JSON in context
       }
+    } else if (rawContext && typeof rawContext === "object") {
+      context = voiceContextSchema.parse(rawContext);
     }
 
-    const result = await this.service.process(file.buffer, context);
+    const result = await this.service.process(file.buffer, context, { executeAction });
 
     response.json({
       success: true,

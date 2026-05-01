@@ -1,5 +1,7 @@
 import { AppError } from "../../shared/errors/app-error.js";
 import { cerebrasChatCompletion } from "../../infrastructure/ai/cerebras.js";
+import { buildStoragePath, getStoragePublicUrl, uploadToStorage } from "../../infrastructure/storage/supabase-storage.js";
+import { generateReportPdfBuffer } from "../../lib/pdf/report-generator.js";
 import { expenseCategoryEnum, type ReportRow } from "../../infrastructure/database/schema.js";
 import type { ReportsRepository } from "./reports.repository.js";
 
@@ -79,10 +81,46 @@ export class ReportsService {
 
     if (existing) {
       const updated = await this.repository.update(existing.id, reportData);
-      return updated!;
+      if (!updated) {
+        throw new AppError("Failed to update report", 500);
+      }
+
+      return updated;
     }
 
     return this.repository.create(reportData);
+  }
+
+  async generatePdf(id: string) {
+    const report = await this.getById(id);
+    const pdfBuffer = await generateReportPdfBuffer({ report });
+    const path = buildStoragePath(
+      `reports/${id}`,
+      `report-${report.periodYear}-${String(report.periodMonth).padStart(2, "0")}.pdf`,
+    );
+
+    try {
+      const uploaded = await uploadToStorage({
+        path,
+        body: pdfBuffer,
+        contentType: "application/pdf",
+        upsert: true,
+      });
+
+      return {
+        pdfPath: uploaded.path,
+        pdfUrl: getStoragePublicUrl(uploaded.bucket, uploaded.path),
+        stored: true,
+      };
+    } catch (error) {
+      return {
+        pdfPath: null,
+        pdfUrl: null,
+        stored: false,
+        pdfDataUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+        storageError: error instanceof Error ? error.message : "Failed to upload report PDF",
+      };
+    }
   }
 
   private async generateAISummary(

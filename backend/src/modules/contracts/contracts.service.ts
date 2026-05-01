@@ -1,4 +1,5 @@
 import { AppError } from "../../shared/errors/app-error.js";
+import { PDFParse } from "pdf-parse";
 import { buildStoragePath, createStorageSignedUrl, getSupabaseStorageBucketName, removeFromStorage, uploadToStorage } from "../../infrastructure/storage/supabase-storage.js";
 import type { ContractFlagRow, ContractRow, NewContractFlagRow, NewContractRow } from "../../infrastructure/database/schema.js";
 import { AIService } from "../ai/ai.service.js";
@@ -68,29 +69,15 @@ export class ContractsService {
     title?: string;
     titleAr?: string | null;
   }) {
-    console.log("[contracts] createFromUpload start", {
-      clientId: input.clientId ?? null,
-      fileName: input.file.originalname,
-      mimeType: input.file.mimetype,
-      size: input.file.size,
-    });
     const title = normalizeText(input.title) ?? this.buildTitleFromFilename(input.file.originalname);
     const titleAr = normalizeText(input.titleAr);
     const analysis = await this.runAnalysis(title, input.file);
     const path = buildStoragePath("contracts/originals", input.file.originalname);
-    console.log("[contracts] prepared contract analysis and storage path", {
-      title,
-      titleAr: titleAr ?? null,
-      path,
-      analysisStatus: analysis.riskLevel,
-      flagsCount: analysis.flags.length,
-    });
     let filePath = path;
     let fileUrl: string | null = null;
     let storageError: string | undefined;
 
     try {
-      console.log("[contracts] uploading file to storage", { path, mimeType: input.file.mimetype });
       const uploaded = await uploadToStorage({
         path,
         body: input.file.buffer,
@@ -98,23 +85,13 @@ export class ContractsService {
         upsert: false,
       });
 
-      console.log("[contracts] storage upload succeeded", {
-        bucket: uploaded.bucket,
-        path: uploaded.path,
-      });
       filePath = uploaded.path;
-      console.log("[contracts] creating signed url", { bucket: uploaded.bucket, path: uploaded.path });
       fileUrl = await createStorageSignedUrl(uploaded.bucket, uploaded.path);
     } catch (error) {
       console.error("Failed to store contract file in Supabase:", error instanceof Error ? error.message : error);
       storageError = error instanceof Error ? error.message : "Failed to store contract file";
     }
 
-    console.log("[contracts] creating database record", {
-      filePath,
-      hasFileUrl: Boolean(fileUrl),
-      storageFallback: Boolean(storageError),
-    });
     const contract = await this.repository.create(
       {
         clientId: input.clientId ?? null,
@@ -146,12 +123,6 @@ export class ContractsService {
         sortOrder: flag.sortOrder,
       })),
     );
-
-    console.log("[contracts] database record created", {
-      contractId: contract.id,
-      filePath: contract.filePath,
-      fileUrl: contract.fileUrl,
-    });
 
     return {
       ...contract,
@@ -190,7 +161,7 @@ export class ContractsService {
         console.warn("[contracts] Groq vision analysis failed, falling back to heuristic:", error instanceof Error ? error.message : error);
       }
     }
-    return this.analyzeContract(title, file.originalname);
+    return this.analyzeUploadedContract(title, file.originalname, await this.extractContractText(file));
   }
 
   private normaliseAnalysisResult(raw: Record<string, unknown>): ContractAnalysisResult | null {
@@ -249,8 +220,28 @@ export class ContractsService {
     return baseName.replace(/[-_]+/g, " ").trim() || "Contract";
   }
 
-  private analyzeContract(title: string, originalFilename: string): ContractAnalysisResult {
-    const content = `${title} ${originalFilename}`.toLowerCase();
+  private async analyzeUploadedContract(
+    title: string,
+    originalFilename: string,
+    contractText: string,
+  ): Promise<ContractAnalysisResult> {
+    if (contractText.trim().length >= 40) {
+      try {
+        const aiResult = await this.aiService.analyzeContract({
+          title,
+          contractText: contractText.slice(0, 20_000),
+        });
+        return this.normalizeAIAnalysis(aiResult, title);
+      } catch (error) {
+        console.warn("[contracts] AI analysis failed, using heuristic fallback:", error instanceof Error ? error.message : error);
+      }
+    }
+
+    return this.analyzeContractHeuristically(title, originalFilename, contractText);
+  }
+
+  private analyzeContractHeuristically(title: string, originalFilename: string, contractText = ""): ContractAnalysisResult {
+    const content = `${title} ${originalFilename} ${contractText}`.toLowerCase();
     const flags: ContractAnalysisResult["flags"] = [];
     const keyTerms: ContractAnalysisResult["keyTerms"] = {};
 
@@ -311,6 +302,71 @@ export class ContractsService {
           : "low",
       keyTerms,
       flags,
+    };
+  }
+
+  private async extractContractText(file: Express.Multer.File): Promise<string> {
+    if (file.mimetype === "application/pdf") {
+      let parser: PDFParse | null = null;
+
+      try {
+        parser = new PDFParse({ data: new Uint8Array(file.buffer) });
+        const result = await parser.getText({ first: 5 });
+        return result.text.trim();
+      } catch (error) {
+        console.warn("[contracts] PDF text extraction failed:", error instanceof Error ? error.message : error);
+        return "";
+      } finally {
+        await parser?.destroy().catch(() => undefined);
+      }
+    }
+
+    if (file.mimetype.startsWith("text/")) {
+      return file.buffer.toString("utf8").trim();
+    }
+
+    return "";
+  }
+
+  private normalizeAIAnalysis(input: any, title: string): ContractAnalysisResult {
+    const flags = Array.isArray(input?.flags) ? input.flags : [];
+    const riskLevel = ["low", "medium", "high"].includes(input?.riskLevel) ? input.riskLevel : "medium";
+
+    return {
+      summary: String(input?.summaryEn ?? input?.summary ?? `AI review completed for ${title}.`),
+      summaryAr: String(input?.summary ?? input?.summaryAr ?? `اكتملت مراجعة العقد: ${title}.`),
+      riskLevel,
+      keyTerms: {
+        paymentAmount: typeof input?.keyTerms?.paymentAmount === "number" ? input.keyTerms.paymentAmount : undefined,
+        paymentSchedule: input?.keyTerms?.paymentSchedule ?? undefined,
+        contractDuration: input?.keyTerms?.contractDuration ?? undefined,
+        terminationClause: input?.keyTerms?.terminationClause ?? undefined,
+      },
+      flags: flags.length > 0
+        ? flags.map((flag: any, index: number) => ({
+            severity: ["info", "warning", "critical"].includes(flag?.severity) ? flag.severity : "info",
+            title: String(flag?.titleEn ?? flag?.title ?? "Contract note"),
+            titleAr: String(flag?.title ?? flag?.titleAr ?? "ملاحظة على العقد"),
+            description: String(flag?.descriptionEn ?? flag?.description ?? ""),
+            descriptionAr: String(flag?.description ?? flag?.descriptionAr ?? ""),
+            clauseReference: flag?.clauseReference,
+            recommendation: flag?.recommendationEn ?? flag?.recommendation,
+            recommendationAr: flag?.recommendation ?? flag?.recommendationAr,
+            sortOrder: index,
+          }))
+        : [
+            {
+              severity: "info",
+              title: "AI review completed",
+              titleAr: "تمت مراجعة العقد",
+              description: "No specific flags were returned by the AI analyzer.",
+              descriptionAr: "لم يرجع محلل الذكاء الاصطناعي ملاحظات محددة.",
+              clauseReference: "general",
+              recommendation: "Review manually before signing.",
+              recommendationAr: "راجعه يدوياً قبل التوقيع.",
+              sortOrder: 0,
+            },
+          ],
     };
   }
 }

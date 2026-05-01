@@ -1,4 +1,4 @@
-import { eq, sum, count, desc, gte, and } from "drizzle-orm";
+import { eq, sum, count, desc } from "drizzle-orm";
 import { db } from "../../infrastructure/database/db.js";
 import {
   clients,

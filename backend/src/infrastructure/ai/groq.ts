@@ -54,6 +54,34 @@ export interface GroqTTSResult {
   contentType: string;
 }
 
+export interface GroqReceiptExtraction {
+  merchantName: string | null;
+  amount: number | null;
+  currency: string | null;
+  transactionDate: string | null;
+  category:
+    | "food_dining"
+    | "transport"
+    | "software_tools"
+    | "office_supplies"
+    | "communication"
+    | "marketing"
+    | "education"
+    | "health"
+    | "rent"
+    | "utilities"
+    | "entertainment"
+    | "other"
+    | null;
+  description: string;
+  descriptionAr: string;
+  isHalal: boolean;
+  needsPurification: boolean;
+  confidence: number;
+  rawText: string;
+  notes: string[];
+}
+
 export async function groqTextToSpeech(
   text: string,
   options: {
@@ -69,9 +97,9 @@ export async function groqTextToSpeech(
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: options.model ?? "playai-tts-arabic",
+      model: options.model ?? "canopylabs/orpheus-arabic-saudi",
       input: text,
-      voice: options.voice ?? "Nasser-PlayAI",
+      voice: options.voice ?? "abdullah",
       response_format: options.responseFormat ?? "wav",
     }),
   });
@@ -125,6 +153,7 @@ export async function groqVisionAnalyze(
 
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(30_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.GROQ_API_KEY}`,
@@ -142,4 +171,117 @@ export async function groqVisionAnalyze(
   };
 
   return json.choices?.[0]?.message?.content ?? "";
+}
+
+export async function groqAnalyzeReceiptImage(
+  imageBuffer: Buffer,
+  mimeType: string,
+): Promise<GroqReceiptExtraction> {
+  const dataUrl = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+
+  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(30_000),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: env.GROQ_VISION_MODEL,
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_completion_tokens: 1024,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You extract expense receipt data for an Arabic/English freelancer finance app. Return only valid JSON.",
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Read this receipt/invoice image. Extract JSON with keys: merchantName, amount, currency, transactionDate (YYYY-MM-DD or null), category (food_dining, transport, software_tools, office_supplies, communication, marketing, education, health, rent, utilities, entertainment, other), description, descriptionAr, isHalal, needsPurification, confidence (0..1), rawText, notes array. Use null for unknown. Do not invent totals.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: dataUrl,
+              },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "unknown error");
+    throw new Error(`Groq Vision API error (${response.status}): ${errorBody}`);
+  }
+
+  const payload = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = payload.choices?.[0]?.message?.content ?? "{}";
+
+  return normalizeReceiptExtraction(JSON.parse(extractJson(content)));
+}
+
+function normalizeReceiptExtraction(input: Partial<GroqReceiptExtraction>): GroqReceiptExtraction {
+  const categoryValues = new Set([
+    "food_dining",
+    "transport",
+    "software_tools",
+    "office_supplies",
+    "communication",
+    "marketing",
+    "education",
+    "health",
+    "rent",
+    "utilities",
+    "entertainment",
+    "other",
+  ]);
+  const category = typeof input.category === "string" && categoryValues.has(input.category)
+    ? input.category
+    : "other";
+
+  return {
+    merchantName: input.merchantName ?? null,
+    amount: typeof input.amount === "number" && Number.isFinite(input.amount) ? input.amount : null,
+    currency: input.currency ?? null,
+    transactionDate: input.transactionDate ?? null,
+    category: category as GroqReceiptExtraction["category"],
+    description: input.description ?? "Receipt expense",
+    descriptionAr: input.descriptionAr ?? "مصروف من إيصال",
+    isHalal: input.isHalal ?? true,
+    needsPurification: input.needsPurification ?? false,
+    confidence: clampConfidence(input.confidence),
+    rawText: input.rawText ?? "",
+    notes: Array.isArray(input.notes) ? input.notes.map(String) : [],
+  };
+}
+
+function clampConfidence(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : 0;
+}
+
+function extractJson(text: string): string {
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    return codeBlockMatch[1].trim();
+  }
+
+  const braceStart = text.indexOf("{");
+  const braceEnd = text.lastIndexOf("}");
+  if (braceStart !== -1 && braceEnd > braceStart) {
+    return text.slice(braceStart, braceEnd + 1);
+  }
+
+  return text;
 }

@@ -108,20 +108,12 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
   const sym = symbols[currency] || currency;
   const subtotal = invoice.amount / 1.16;
   const vat = invoice.amount - subtotal;
-  const terms = "terms" in invoice ? invoice.terms : undefined;
+  const terms = (invoice as Invoice & { terms?: string }).terms;
   const fmtNum = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
   const fmtMoney = (n: number) => `${fmtNum(n)} ${sym}`;
-  const backendId = (invoice as Invoice & { backendId?: string }).backendId;
-  const existingPdfUrl = (invoice as Invoice & { pdfUrl?: string | null }).pdfUrl;
   const description = (invoice as Invoice & { description?: string }).description || "تصميم هوية بصرية";
 
   function downloadPdf() {
-    if (existingPdfUrl) {
-      window.open(existingPdfUrl, "_blank", "noopener,noreferrer");
-      onToast?.("تم فتح الفاتورة", "success", "PDF جاهز");
-      return;
-    }
-
     // Open window synchronously before any async operation to avoid popup blocker
     const win = window.open("", "_blank", "width=720,height=960");
     if (!win) {
@@ -129,28 +121,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
       return;
     }
 
-    if (apiConfig.useBackend && backendId) {
-      setDownloading(true);
-      win.document.write(`<html><body style="font-family:sans-serif;text-align:center;padding:40px;direction:rtl"><p>جاري إنشاء PDF...</p></body></html>`);
-      masrafApi.invoices.generatePdf(backendId)
-        .then((result) => {
-          const url = result.signedUrl || result.pdfUrl || (result as Record<string, unknown>).url;
-          if (typeof url === "string" && url) {
-            win.location.href = url;
-          } else {
-            win.close();
-          }
-          onToast?.("تم إنشاء ملف PDF بنجاح", "success", "PDF جاهز");
-        })
-        .catch(() => {
-          win.close();
-          onToast?.("تعذر إنشاء PDF الآن، تحقق من اتصال الخلفية", "error", "PDF");
-        })
-        .finally(() => setDownloading(false));
-      return;
-    }
-
-    // Client-side PDF: write a styled HTML invoice to the new window then print it
+    setDownloading(true);
     const html = buildInvoiceHtml({
       id: invoice.id,
       client: invoice.client,
@@ -169,7 +140,11 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(() => win.print(), 450);
+    setTimeout(() => {
+      win.print();
+      setDownloading(false);
+      onToast?.("تم توليد الفاتورة من جديد", "success", "PDF جاهز");
+    }, 450);
   }
 
   return (

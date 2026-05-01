@@ -40,6 +40,12 @@ export async function cerebrasChatCompletion(
   const maxRetries = options.maxRetries ?? 2;
   const modelCandidates = uniqueCandidates([
     {
+      provider: "groq",
+      baseUrl: GROQ_BASE_URL,
+      apiKey: env.GROQ_API_KEY,
+      model: env.GROQ_CHAT_MODEL,
+    },
+    {
       provider: "cerebras",
       baseUrl: CEREBRAS_BASE_URL,
       apiKey: env.CEREBRAS_API_KEY,
@@ -56,12 +62,6 @@ export async function cerebrasChatCompletion(
       baseUrl: GROQ_BASE_URL,
       apiKey: env.GROQ_API_KEY,
       model: "llama-3.1-8b-instant",
-    },
-    {
-      provider: "groq",
-      baseUrl: GROQ_BASE_URL,
-      apiKey: env.GROQ_API_KEY,
-      model: env.GROQ_CHAT_MODEL,
     },
   ]);
   let lastError: unknown;
@@ -80,7 +80,7 @@ export async function cerebrasChatCompletion(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error("Cerebras API error: all configured models failed.");
+    : new Error("AI API error: all configured models failed.");
 }
 
 async function requestWithModel(

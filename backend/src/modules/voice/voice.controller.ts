@@ -53,6 +53,7 @@ export class VoiceController {
     let history: z.infer<typeof voiceHistorySchema> | undefined;
     const rawContext = request.body?.context;
     const rawHistory = request.body?.history;
+    const voice = typeof request.body?.voice === "string" ? request.body.voice : undefined;
     const executeAction = request.body?.executeAction === "true" || request.body?.execute_action === "true";
 
     if (typeof rawContext === "string" && rawContext.trim().length > 0) {
@@ -75,7 +76,7 @@ export class VoiceController {
       history = voiceHistorySchema.parse(rawHistory);
     }
 
-    const result = await this.service.process(file.buffer, context, { executeAction, history });
+    const result = await this.service.process(file.buffer, context, { executeAction, history, voice });
 
     response.json({
       success: true,

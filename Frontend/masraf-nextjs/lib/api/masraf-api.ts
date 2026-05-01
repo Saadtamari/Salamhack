@@ -133,10 +133,10 @@ export const masrafApi = {
         method: "POST",
         formData: toFormData({ audio: file, language }),
       }),
-    process: (file: File, context?: AgentContext, executeAction = true, history?: AgentHistoryMessage[]) =>
+    process: (file: File, context?: AgentContext, executeAction = true, history?: AgentHistoryMessage[], voice = "fatima") =>
       apiRequest<VoiceProcessResult>("/api/voice/process", {
         method: "POST",
-        formData: toFormData({ audio: file, context, executeAction, history }),
+        formData: toFormData({ audio: file, context, executeAction, history, voice }),
       }),
     synthesize: (text: string, voice = "fatima") => apiBinary("/api/voice/synthesize", { method: "POST", body: { text, voice } }),
   },

@@ -5,7 +5,13 @@
       "Bash(find *)",
       "Bash(npx tsc *)",
       "Bash(npx -p typescript tsc --noEmit)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\D2\\\\The Projects\\\\Competitions\\\\SalamHack\\\\Salamhack\\\\backend\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(npm run *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

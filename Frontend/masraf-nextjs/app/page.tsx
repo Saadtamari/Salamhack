@@ -12,14 +12,21 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setUser(getCurrentUser());
-    setHydrated(true);
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      setUser(getCurrentUser());
+      setHydrated(true);
+    });
 
     function onLogout() {
       setUser(null);
     }
     window.addEventListener("masraf:logout", onLogout);
-    return () => window.removeEventListener("masraf:logout", onLogout);
+    return () => {
+      active = false;
+      window.removeEventListener("masraf:logout", onLogout);
+    };
   }, []);
 
   if (!hydrated) {

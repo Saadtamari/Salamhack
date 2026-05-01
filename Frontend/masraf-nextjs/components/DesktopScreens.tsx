@@ -20,12 +20,27 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 import { MASRAF_DATA } from "@/lib/data";
 import { apiConfig, masrafApi } from "@/lib/api";
+import type { BackendContract, ContractFlag } from "@/lib/api";
 import { fmt, IslamicPattern, Avatar, StatusBadge, RiskBadge, MiniChart, DonutChart, RunwayIndicator, HalalBadge, EmptyState } from "./ui";
 import { MasrafIcon } from "./icons";
 import { InvoicePreviewModal, ChaserModal, ReceiptScanner, PurificationLedger } from "./Modals";
 import type { Invoice } from "@/lib/data";
 
 const DD = MASRAF_DATA;
+type DesktopContractFlag = {
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description: string;
+  recommendation: string;
+  clause?: string;
+};
+type DesktopContractCard = Omit<typeof DD.contracts[number], "id"> & {
+  id: string | number;
+  backendId?: string;
+  analysisFlags?: DesktopContractFlag[];
+  summary?: string;
+  riskLevel?: string;
+};
 
 // ─── Desktop Dashboard ────────────────────────────────────────────────────────
 export function DesktopDashboard({ onNavigate, toast }: {
@@ -522,32 +537,166 @@ export function DesktopZakat({ toast }: {
 }
 
 // ─── Desktop Contracts ────────────────────────────────────────────────────────
+function numberFromApi(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function cleanContractTitle(fileName: string) {
+  return fileName.replace(/\.[^.]+$/i, "").replace(/[_-]+/g, " ").trim() || "عقد جديد";
+}
+
+function contractSeverityLabel(severity: DesktopContractFlag["severity"]) {
+  if (severity === "critical") return "حرج";
+  if (severity === "warning") return "تحذير";
+  return "معلومة";
+}
+
+function contractSeverityStyle(severity: DesktopContractFlag["severity"]) {
+  if (severity === "critical") return { bg: "#FFEBEE", fg: "#B71C1C" };
+  if (severity === "warning") return { bg: "#FFF3E0", fg: "#E65100" };
+  return { bg: "#E8F5E9", fg: "#1B5E20" };
+}
+
+function backendFlagToDesktop(flag: ContractFlag, index: number): DesktopContractFlag {
+  return {
+    severity: flag.severity ?? "info",
+    title: flag.titleAr || flag.title || `ملاحظة ${index + 1}`,
+    description: flag.descriptionAr || flag.description || "لا يوجد وصف إضافي.",
+    recommendation: flag.recommendationAr || flag.recommendation || "راجع هذا البند قبل التوقيع.",
+    clause: flag.clauseReference,
+  };
+}
+
+function backendContractToDesktop(contract: BackendContract): DesktopContractCard {
+  const resultFlags = Array.isArray(contract.analysisResult?.flags)
+    ? contract.analysisResult.flags.map(backendFlagToDesktop)
+    : [];
+  const rowFlags = Array.isArray(contract.flags) ? contract.flags.map(backendFlagToDesktop) : [];
+  const analysisFlags = rowFlags.length > 0 ? rowFlags : resultFlags;
+  const criticalFlags = analysisFlags.filter((flag) => flag.severity === "critical").length;
+
+  return {
+    id: contract.id,
+    backendId: contract.id,
+    title: contract.titleAr || contract.title,
+    client: contract.client?.nameAr || contract.client?.name || "عميل",
+    date: contract.createdAt ? new Date(contract.createdAt).toLocaleDateString("ar-SA") : new Date().toLocaleDateString("ar-SA"),
+    amount: numberFromApi(contract.paymentAmount),
+    criticalFlags,
+    flagsCount: analysisFlags.length,
+    status: contract.analysisStatus === "completed" ? "analyzed" : "pending",
+    analysisFlags,
+    summary: contract.analysisResult?.summaryAr || contract.analysisResult?.summary,
+    riskLevel: contract.analysisResult?.riskLevel,
+  };
+}
+
+function fallbackContractFlags(contract: DesktopContractCard): DesktopContractFlag[] {
+  if (contract.analysisFlags?.length) {
+    return contract.analysisFlags;
+  }
+
+  if (contract.status === "pending") {
+    return [{
+      severity: "info",
+      title: "التحليل قيد الانتظار",
+      description: "هذا العقد لم يكتمل تحليله بعد.",
+      recommendation: "ارفع العقد مرة أخرى أو انتظر اكتمال التحليل من الخلفية.",
+    }];
+  }
+
+  if (contract.criticalFlags > 0) {
+    return DD.contractFlags.map((flag) => ({
+      severity: flag.severity as DesktopContractFlag["severity"],
+      title: flag.title,
+      description: flag.desc,
+      recommendation: flag.recommendation,
+      clause: flag.clause,
+    }));
+  }
+
+  return [{
+    severity: "info",
+    title: "لا توجد مخاطر حرجة",
+    description: "لم تظهر لهذا العقد بنود حرجة في التحليل الحالي.",
+    recommendation: "راجع البنود الرئيسية يدوياً قبل التوقيع النهائي.",
+  }];
+}
+
 export function DesktopContracts({ toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
-  const [selected, setSelected] = useState<typeof DD.contracts[0] | null>(null);
+  const [selected, setSelected] = useState<DesktopContractCard | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [uploadedContracts, setUploadedContracts] = useState<typeof DD.contracts>([]);
+  const [uploadedContracts, setUploadedContracts] = useState<DesktopContractCard[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const allContracts = [...uploadedContracts, ...DD.contracts];
+  const allContracts: DesktopContractCard[] = [...uploadedContracts, ...DD.contracts];
 
   async function handleContractFile(file: File) {
     setAnalyzing(true);
     toast?.(`جاري تحليل "${file.name}" بالذكاء الاصطناعي...`, "info", "رفع عقد");
-    await new Promise((resolve) => setTimeout(resolve, 1600));
-    const newContract = {
-      id: `CNT-${Date.now()}`,
-      title: file.name.replace(/\.pdf$/i, "").replace(/_/g, " "),
-      client: "عميل",
-      date: new Date().toLocaleDateString("ar-SA"),
-      amount: 0,
-      criticalFlags: 1,
-      status: "analyzed",
-    } as typeof DD.contracts[0];
-    setUploadedContracts((prev) => [newContract, ...prev]);
-    setSelected(newContract);
-    setAnalyzing(false);
-    toast?.("تم تحليل العقد — يوجد بند يحتاج مراجعة", "success", "تحليل العقد");
+    try {
+      let newContract: DesktopContractCard;
+
+      if (apiConfig.useBackend) {
+        const uploaded = await masrafApi.contracts.upload({
+          file,
+          title: cleanContractTitle(file.name),
+          titleAr: cleanContractTitle(file.name),
+        });
+        newContract = backendContractToDesktop(uploaded);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        newContract = {
+          id: `CNT-${Date.now()}`,
+          title: cleanContractTitle(file.name),
+          client: "عميل",
+          date: new Date().toLocaleDateString("ar-SA"),
+          amount: 0,
+          criticalFlags: 0,
+          flagsCount: 1,
+          status: "analyzed",
+          analysisFlags: [{
+            severity: "info",
+            title: "تحليل تجريبي مكتمل",
+            description: "تم تجهيز العقد للعرض. فعّل الخلفية للحصول على تحليل حقيقي من الذكاء الاصطناعي.",
+            recommendation: "اربط الخلفية ثم أعد رفع الملف للحصول على البنود المستخرجة من العقد نفسه.",
+          }],
+          summary: "تم رفع العقد في وضع العرض التجريبي.",
+          riskLevel: "low",
+        };
+      }
+
+      setUploadedContracts((prev) => [newContract, ...prev]);
+      setSelected(newContract);
+      const critical = newContract.criticalFlags > 0 ? ` — ${newContract.criticalFlags} بند حرج` : "";
+      toast?.(`تم تحليل العقد${critical}`, "success", "تحليل العقد");
+    } catch (error) {
+      const failedContract: DesktopContractCard = {
+        id: `CNT-${Date.now()}`,
+        title: cleanContractTitle(file.name),
+        client: "عميل",
+        date: new Date().toLocaleDateString("ar-SA"),
+        amount: 0,
+        criticalFlags: 0,
+        flagsCount: 1,
+        status: "pending",
+        analysisFlags: [{
+          severity: "warning",
+          title: "تعذر تحليل العقد من الخلفية",
+          description: error instanceof Error ? error.message : "حدث خطأ أثناء رفع العقد أو تحليله.",
+          recommendation: "تحقق من تشغيل الخلفية ومفاتيح الذكاء الاصطناعي ثم أعد رفع الملف.",
+        }],
+        summary: "لم يكتمل التحليل.",
+        riskLevel: "medium",
+      };
+      setUploadedContracts((prev) => [failedContract, ...prev]);
+      setSelected(failedContract);
+      toast?.("تعذر تحليل العقد من الخلفية", "error", "تحليل العقد");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   return (
@@ -607,19 +756,28 @@ export function DesktopContracts({ toast }: {
           {selected ? (
             <div style={{ background: "#FFFDF8", borderRadius: 20, padding: "24px", border: "1px solid #DDD6CA" }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: "#11100E", marginBottom: 20 }}>نتائج التحليل</div>
-              {DD.contractFlags.map((f, i) => (
-                <div key={i} style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
-                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: f.severity === "critical" ? "#FFEBEE" : "#FFF3E0", color: f.severity === "critical" ? "#B71C1C" : "#E65100", fontWeight: 800 }}>
-                    {f.severity === "critical" ? "حرج" : "تحذير"}
-                  </span>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#11100E", margin: "8px 0 6px" }}>{f.title}</div>
-                  <div style={{ fontSize: 12, color: "#6D675E", marginBottom: 10 }}>{f.desc}</div>
-                  <div style={{ background: "#F0F7F0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#1B5E20", display: "flex", alignItems: "center", gap: 8 }}>
-                    <MasrafIcon icon={InformationCircleIcon} size={15} color="#1B5E20" />
-                    {f.recommendation}
-                  </div>
+              {selected.summary && (
+                <div style={{ background: "#F0F7F0", border: "1px solid #C8E6C9", borderRadius: 14, padding: "13px 14px", fontSize: 12, color: "#1B5E20", lineHeight: 1.8, marginBottom: 14 }}>
+                  {selected.summary}
                 </div>
-              ))}
+              )}
+              {fallbackContractFlags(selected).map((f, i) => {
+                const color = contractSeverityStyle(f.severity);
+                return (
+                  <div key={`${f.title}-${i}`} style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
+                    <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: color.bg, color: color.fg, fontWeight: 800 }}>
+                      {contractSeverityLabel(f.severity)}
+                    </span>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#11100E", margin: "8px 0 6px" }}>{f.title}</div>
+                    {f.clause && <div style={{ fontSize: 11, color: "#92897C", marginBottom: 6 }}>البند: {f.clause}</div>}
+                    <div style={{ fontSize: 12, color: "#6D675E", marginBottom: 10, lineHeight: 1.7 }}>{f.description}</div>
+                    <div style={{ background: "#F0F7F0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#1B5E20", display: "flex", alignItems: "center", gap: 8, lineHeight: 1.6 }}>
+                      <MasrafIcon icon={InformationCircleIcon} size={15} color="#1B5E20" />
+                      {f.recommendation}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div style={{ background: "#FFFDF8", borderRadius: 20, padding: "24px", border: "1px solid #DDD6CA", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>

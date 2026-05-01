@@ -2,8 +2,17 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { cerebrasChatCompletion } from "../../infrastructure/ai/cerebras.js";
 import { buildStoragePath, getStoragePublicUrl, uploadToStorage } from "../../infrastructure/storage/supabase-storage.js";
 import { generateReportPdfBuffer } from "../../lib/pdf/report-generator.js";
-import type { ReportRow } from "../../infrastructure/database/schema.js";
+import { expenseCategoryEnum, type ReportRow } from "../../infrastructure/database/schema.js";
 import type { ReportsRepository } from "./reports.repository.js";
+
+type ExpenseCategory = (typeof expenseCategoryEnum.enumValues)[number];
+
+function toExpenseCategory(value: string | null | undefined): ExpenseCategory | null {
+  if (!value) return null;
+  return (expenseCategoryEnum.enumValues as readonly string[]).includes(value)
+    ? (value as ExpenseCategory)
+    : null;
+}
 
 const MONTHS_AR = [
   "", "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
@@ -65,7 +74,7 @@ export class ReportsService {
       invoicesPaid: aggregated.invoicesPaid,
       invoicesOverdue: aggregated.invoicesOverdue,
       topClientId: aggregated.topClientId,
-      topCategory: aggregated.topCategory,
+      topCategory: toExpenseCategory(aggregated.topCategory),
       aiSummary,
       aiSummaryAr,
     };

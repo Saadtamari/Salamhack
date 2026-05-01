@@ -116,6 +116,63 @@ export async function groqTextToSpeech(
   };
 }
 
+export interface GroqVisionOptions {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  jsonMode?: boolean;
+}
+
+export async function groqVisionAnalyze(
+  imageBuffer: Buffer,
+  mimeType: string,
+  prompt: string,
+  options: GroqVisionOptions = {},
+): Promise<string> {
+  const base64 = imageBuffer.toString("base64");
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  const body: Record<string, unknown> = {
+    model: options.model ?? "meta-llama/llama-4-scout-17b-16e-instruct",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: dataUrl } },
+        ],
+      },
+    ],
+    temperature: options.temperature ?? 0.2,
+    max_completion_tokens: options.maxTokens ?? 1024,
+  };
+
+  if (options.jsonMode) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(30_000),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "unknown error");
+    throw new Error(`Groq vision API error (${response.status}): ${errorBody}`);
+  }
+
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
 export async function groqAnalyzeReceiptImage(
   imageBuffer: Buffer,
   mimeType: string,

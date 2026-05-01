@@ -11,9 +11,11 @@ export interface TranscribeResult {
 
 export interface VoiceProcessResult {
   transcript: string;
-  aiResponse: AIChatResponse;
-  audioBase64?: string;
-  audioContentType?: string;
+  response: AIChatResponse;
+  audio?: {
+    contentType: string;
+    base64: string;
+  } | null;
   processingTimeMs: number;
 }
 
@@ -62,11 +64,12 @@ export class VoiceService {
       const processingTimeMs = Date.now() - startTime;
       return {
         transcript: "",
-        aiResponse: {
+        response: {
           message: "لم أتمكن من فهم الصوت. حاول مرة أخرى بوضوح.",
           action: null,
           suggestions: ["حاول مرة أخرى", "اكتب طلبك"],
         },
+        audio: null,
         processingTimeMs,
       };
     }
@@ -79,12 +82,13 @@ export class VoiceService {
     });
 
     // Step 3: Try TTS on the response (best-effort)
-    let audioBase64: string | undefined;
-    let audioContentType: string | undefined;
+    let audio: VoiceProcessResult["audio"] = null;
     try {
       const ttsResult = await this.synthesize(aiResponse.message);
-      audioBase64 = ttsResult.audioBuffer.toString("base64");
-      audioContentType = ttsResult.contentType;
+      audio = {
+        base64: ttsResult.audioBuffer.toString("base64"),
+        contentType: ttsResult.contentType,
+      };
     } catch (error) {
       console.warn("[voice] TTS failed, returning text-only:", error instanceof Error ? error.message : error);
     }
@@ -105,9 +109,8 @@ export class VoiceService {
 
     return {
       transcript: transcription.text,
-      aiResponse,
-      audioBase64,
-      audioContentType,
+      response: aiResponse,
+      audio,
       processingTimeMs,
     };
   }

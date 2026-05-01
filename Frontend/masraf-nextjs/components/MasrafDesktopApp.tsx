@@ -303,6 +303,7 @@ export default function MasrafDesktopApp() {
             if (type === "navigate") navigate(payload);
             setVoiceOpen(false);
           }}
+          currentScreen={screen}
         />
       )}
     </div>

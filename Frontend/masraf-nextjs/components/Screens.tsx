@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useState } from "react";
+import { logout as authLogout } from "@/lib/auth";
 import {
   Alert02Icon,
   AiVoiceIcon,
@@ -666,6 +667,12 @@ export function SettingsScreen({ toast }: { toast?: (msg: string, type?: string,
           ))}
           <button onClick={() => toast?.("تم حفظ الإعدادات", "success", "الإعدادات")} style={{ width: "100%", marginTop: 14, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-ar)" }}>حفظ</button>
         </div>
+        <button
+          onClick={() => { authLogout(); toast?.("تم تسجيل الخروج", "info"); window.dispatchEvent(new Event("masraf:logout")); }}
+          style={{ width: "100%", marginTop: 14, background: "transparent", color: "#B71C1C", border: "1px solid #B71C1C", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-ar)" }}
+        >
+          تسجيل الخروج
+        </button>
       </div>
     </div>
   );

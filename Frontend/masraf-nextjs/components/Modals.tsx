@@ -206,26 +206,102 @@ export function ChaserModal({ invoice, onClose, onToast }: {
 }
 
 // ─── Receipt Scanner ──────────────────────────────────────────────────────────
+type ReceiptCategory =
+  | "food_dining"
+  | "transport"
+  | "software_tools"
+  | "office_supplies"
+  | "communication"
+  | "marketing"
+  | "education"
+  | "health"
+  | "rent"
+  | "utilities"
+  | "entertainment"
+  | "other";
+
+const CATEGORY_LABELS: Record<ReceiptCategory, string> = {
+  food_dining: "طعام ومطاعم",
+  transport: "مواصلات",
+  software_tools: "برمجيات وأدوات",
+  office_supplies: "مستلزمات مكتبية",
+  communication: "اتصالات",
+  marketing: "تسويق",
+  education: "تعليم",
+  health: "صحة",
+  rent: "إيجار",
+  utilities: "خدمات",
+  entertainment: "ترفيه",
+  other: "أخرى",
+};
+
+type ReceiptResult = {
+  merchant: string;
+  amount: number;
+  category: ReceiptCategory;
+  currency: string;
+  date: string;
+  halal: boolean;
+  needsPurification: boolean;
+  descriptionAr: string;
+  notes?: string;
+};
+
 export function ReceiptScanner({ onClose, onToast }: {
   onClose: () => void;
   onToast?: (msg: string, type?: string) => void;
 }) {
   const [stage, setStage] = useState<"upload" | "scanning" | "result">("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [result, setResult] = useState<{ merchant: string; amount: number; category: string; date: string; halal: boolean } | null>(null);
+  const [result, setResult] = useState<ReceiptResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleScan(file?: File) {
-    if (file) setSelectedFile(file);
+    if (!file) return;
+    setSelectedFile(file);
     setStage("scanning");
-    if (apiConfig.useBackend && file) {
+    setError(null);
+
+    if (apiConfig.useBackend) {
       try {
-        await masrafApi.storage.upload({ file, directory: "receipts", access: "signed" });
-      } catch {
-        onToast?.("تم حفظ الإيصال محلياً مؤقتاً، تحقق من اتصال التخزين", "error");
+        const scan = await masrafApi.ai.scanReceipt(file);
+        // Fire-and-forget: also persist the receipt image to storage for future audit
+        void masrafApi.storage.upload({ file, directory: "receipts", access: "signed" }).catch(() => undefined);
+
+        setResult({
+          merchant: scan.merchantNameAr || scan.merchantName,
+          amount: scan.amount,
+          category: scan.category,
+          currency: scan.currency || MASRAF_DATA.user.currency,
+          date: scan.transactionDate,
+          halal: scan.isHalal,
+          needsPurification: scan.needsPurification,
+          descriptionAr: scan.descriptionAr,
+          notes: scan.notes,
+        });
+        setStage("result");
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "تعذر تحليل الإيصال";
+        setError(message);
+        setStage("upload");
+        onToast?.("تعذر تحليل الإيصال، حاول بصورة أوضح", "error");
+        return;
       }
     }
+
+    // Mock fallback when backend is not enabled
     window.setTimeout(() => {
-      setResult({ merchant: "مطعم الرياض", amount: 42, category: "طعام ومطاعم", date: "٢٧ أبريل ٢٠٢٦", halal: true });
+      setResult({
+        merchant: "مطعم الرياض",
+        amount: 42,
+        category: "food_dining",
+        currency: MASRAF_DATA.user.currency,
+        date: new Date().toISOString().slice(0, 10),
+        halal: true,
+        needsPurification: false,
+        descriptionAr: "وجبة في مطعم الرياض",
+      });
       setStage("result");
     }, 900);
   }
@@ -238,13 +314,13 @@ export function ReceiptScanner({ onClose, onToast }: {
         await masrafApi.transactions.create({
           type: "expense",
           amount: result.amount,
-          currency: MASRAF_DATA.user.currency,
-          category: "food_dining",
-          descriptionAr: result.merchant,
+          currency: result.currency,
+          category: result.category,
+          descriptionAr: result.descriptionAr || result.merchant,
           merchantName: result.merchant,
-          transactionDate: new Date().toISOString().slice(0, 10),
+          transactionDate: result.date,
           isHalal: result.halal,
-          needsPurification: !result.halal,
+          needsPurification: result.needsPurification,
           reference: selectedFile?.name,
         });
         onToast?.("تم إضافة المصروف في الخلفية بنجاح", "success");
@@ -267,15 +343,22 @@ export function ReceiptScanner({ onClose, onToast }: {
           مسح الإيصال
         </div>
           {stage === "upload" && (
-            <label style={{ display: "block", background: "#F1EDE5", border: "2px dashed #DDD6CA", borderRadius: 16, padding: "32px", textAlign: "center", cursor: "pointer", marginBottom: 16 }}>
-              <input type="file" accept="image/*,.pdf" onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                if (file) void handleScan(file);
-              }} style={{ display: "none" }} />
-              <div style={{ color: "#11100E", display: "flex", justifyContent: "center", marginBottom: 12 }}><MasrafIcon icon={Camera01Icon} size={38} color="currentColor" /></div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E" }}>اضغط لرفع صورة الإيصال</div>
-              <div style={{ marginTop: 16, background: "#1B5E20", color: "white", borderRadius: 10, padding: "10px 24px", display: "inline-block", fontSize: 13, fontWeight: 700 }}>اختر صورة</div>
-            </label>
+            <>
+              {error && (
+                <div style={{ background: "#FFF6F4", border: "1px solid #F5C9C0", color: "#7A2515", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 12, fontWeight: 700 }}>
+                  {error}
+                </div>
+              )}
+              <label style={{ display: "block", background: "#F1EDE5", border: "2px dashed #DDD6CA", borderRadius: 16, padding: "32px", textAlign: "center", cursor: "pointer", marginBottom: 16 }}>
+                <input type="file" accept="image/*" onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) void handleScan(file);
+                }} style={{ display: "none" }} />
+                <div style={{ color: "#11100E", display: "flex", justifyContent: "center", marginBottom: 12 }}><MasrafIcon icon={Camera01Icon} size={38} color="currentColor" /></div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#11100E" }}>اضغط لرفع صورة الإيصال</div>
+                <div style={{ marginTop: 16, background: "#1B5E20", color: "white", borderRadius: 10, padding: "10px 24px", display: "inline-block", fontSize: 13, fontWeight: 700 }}>اختر صورة</div>
+              </label>
+            </>
           )}
         {stage === "scanning" && (
           <div style={{ textAlign: "center", padding: "32px" }}>
@@ -285,19 +368,55 @@ export function ReceiptScanner({ onClose, onToast }: {
         )}
         {stage === "result" && result && (
           <>
-            <div style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "#11100E", fontWeight: 700, marginBottom: 12 }}>✓ تم التعرف على الإيصال</div>
-              {[
-                { label: "التاجر", value: result.merchant },
-                { label: "المبلغ", value: `$${result.amount}` },
-                { label: "الفئة", value: result.category },
-                { label: "التاريخ", value: result.date },
-              ].map((r) => (
-                <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13 }}>
-                  <span style={{ color: "#6D675E" }}>{r.label}</span>
-                  <span style={{ fontWeight: 700, color: "#11100E" }}>{r.value}</span>
-                </div>
-              ))}
+            <div style={{ background: "#FFFDF8", borderRadius: 14, padding: "16px", marginBottom: 14, border: "1px solid #E8DFCF" }}>
+              <div style={{ fontSize: 12, color: "#11100E", fontWeight: 700, marginBottom: 12 }}>✓ تم التعرف على الإيصال — راجع وعدّل قبل الحفظ</div>
+              <label style={{ display: "block", marginBottom: 10 }}>
+                <span style={{ display: "block", fontSize: 11, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>التاجر</span>
+                <input value={result.merchant} onChange={(e) => setResult({ ...result, merchant: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #DDD6CA", borderRadius: 10, background: "#FAFAF8", color: "#11100E", fontFamily: "IBM Plex Sans Arabic", textAlign: "right", direction: "rtl" }} />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <label>
+                  <span style={{ display: "block", fontSize: 11, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>المبلغ</span>
+                  <input type="number" min={0} step="0.01" value={result.amount}
+                    onChange={(e) => setResult({ ...result, amount: Number(e.target.value) })}
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #DDD6CA", borderRadius: 10, background: "#FAFAF8", color: "#11100E", fontFamily: "IBM Plex Sans Arabic", textAlign: "right", direction: "rtl" }} />
+                </label>
+                <label>
+                  <span style={{ display: "block", fontSize: 11, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>العملة</span>
+                  <input value={result.currency} onChange={(e) => setResult({ ...result, currency: e.target.value.toUpperCase() })}
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #DDD6CA", borderRadius: 10, background: "#FAFAF8", color: "#11100E", fontFamily: "IBM Plex Sans Arabic", textAlign: "right", direction: "rtl" }} />
+                </label>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <label>
+                  <span style={{ display: "block", fontSize: 11, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>الفئة</span>
+                  <select value={result.category} onChange={(e) => setResult({ ...result, category: e.target.value as ReceiptCategory })}
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #DDD6CA", borderRadius: 10, background: "#FAFAF8", color: "#11100E", fontFamily: "IBM Plex Sans Arabic", direction: "rtl" }}>
+                    {(Object.keys(CATEGORY_LABELS) as ReceiptCategory[]).map((key) => (
+                      <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span style={{ display: "block", fontSize: 11, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>التاريخ</span>
+                  <input type="date" value={result.date} onChange={(e) => setResult({ ...result, date: e.target.value })}
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #DDD6CA", borderRadius: 10, background: "#FAFAF8", color: "#11100E", fontFamily: "IBM Plex Sans Arabic", direction: "rtl" }} />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#6D675E", fontWeight: 700, marginBottom: 4 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input type="checkbox" checked={result.halal} onChange={(e) => setResult({ ...result, halal: e.target.checked, needsPurification: e.target.checked ? result.needsPurification : true })} />
+                  حلال
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input type="checkbox" checked={result.needsPurification} onChange={(e) => setResult({ ...result, needsPurification: e.target.checked })} />
+                  يحتاج تطهيراً
+                </label>
+              </div>
+              {result.notes && (
+                <div style={{ marginTop: 8, fontSize: 11, color: "#92897C", fontStyle: "italic" }}>ملاحظة: {result.notes}</div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={addExpense}

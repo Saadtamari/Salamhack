@@ -186,7 +186,7 @@ export default function MasrafApp() {
 
         {voiceOpen && (
           <div style={{ position: "absolute", inset: 0, zIndex: 100, pointerEvents: "none" }}>
-            <VoiceOverlay onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); setVoiceOpen(false); }} />
+            <VoiceOverlay onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); setVoiceOpen(false); }} currentScreen={String(screen) === "onboarding" ? "dashboard" : String(screen)} />
           </div>
         )}
 

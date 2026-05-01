@@ -71,8 +71,7 @@ export class ContractsService {
   }) {
     const title = normalizeText(input.title) ?? this.buildTitleFromFilename(input.file.originalname);
     const titleAr = normalizeText(input.titleAr);
-    const contractText = await this.extractContractText(input.file);
-    const analysis = await this.analyzeUploadedContract(title, input.file.originalname, contractText);
+    const analysis = await this.runAnalysis(title, input.file);
     const path = buildStoragePath("contracts/originals", input.file.originalname);
     let filePath = path;
     let fileUrl: string | null = null;
@@ -148,6 +147,72 @@ export class ContractsService {
     }
 
     return contract;
+  }
+
+  private async runAnalysis(title: string, file: Express.Multer.File): Promise<ContractAnalysisResult> {
+    if (file.mimetype.startsWith("image/")) {
+      try {
+        const visionResult = await this.aiService.analyzeContractImage(file.buffer, file.mimetype, title);
+        if (visionResult && typeof visionResult === "object") {
+          const normalised = this.normaliseAnalysisResult(visionResult as Record<string, unknown>);
+          if (normalised) return normalised;
+        }
+      } catch (error) {
+        console.warn("[contracts] Groq vision analysis failed, falling back to heuristic:", error instanceof Error ? error.message : error);
+      }
+    }
+    return this.analyzeUploadedContract(title, file.originalname, await this.extractContractText(file));
+  }
+
+  private normaliseAnalysisResult(raw: Record<string, unknown>): ContractAnalysisResult | null {
+    const flagsRaw = Array.isArray(raw.flags) ? (raw.flags as Record<string, unknown>[]) : [];
+    const allowedSeverity: ContractFlagRow["severity"][] = ["info", "warning", "critical"];
+    const flags: ContractAnalysisResult["flags"] = flagsRaw.map((flag, index) => {
+      const severityValue = typeof flag.severity === "string" ? flag.severity : "info";
+      const severity = (allowedSeverity as string[]).includes(severityValue)
+        ? (severityValue as ContractFlagRow["severity"])
+        : "info";
+      return {
+        severity,
+        title: typeof flag.title === "string" ? flag.title : "Flag",
+        titleAr: typeof flag.titleAr === "string" ? flag.titleAr : (typeof flag.title === "string" ? flag.title : "تنبيه"),
+        description: typeof flag.description === "string" ? flag.description : "",
+        descriptionAr: typeof flag.descriptionAr === "string" ? flag.descriptionAr : "",
+        clauseReference: typeof flag.clauseReference === "string" ? flag.clauseReference : undefined,
+        recommendation: typeof flag.recommendation === "string" ? flag.recommendation : undefined,
+        recommendationAr: typeof flag.recommendationAr === "string" ? flag.recommendationAr : undefined,
+        sortOrder: index,
+      };
+    });
+
+    if (flags.length === 0 && !raw.summary && !raw.summaryAr) {
+      return null;
+    }
+
+    const keyTermsRaw = (raw.keyTerms && typeof raw.keyTerms === "object" ? raw.keyTerms : {}) as Record<string, unknown>;
+    const paymentAmountRaw = Number(keyTermsRaw.paymentAmount);
+    const allowedRisk = ["low", "medium", "high"] as const;
+    const riskValue = typeof raw.riskLevel === "string" ? raw.riskLevel : "medium";
+    const riskLevel = (allowedRisk as readonly string[]).includes(riskValue)
+      ? (riskValue as ContractAnalysisResult["riskLevel"])
+      : flags.some((flag) => flag.severity === "critical")
+        ? "high"
+        : flags.some((flag) => flag.severity === "warning")
+          ? "medium"
+          : "low";
+
+    return {
+      summary: typeof raw.summary === "string" ? raw.summary : "Contract analyzed via vision model.",
+      summaryAr: typeof raw.summaryAr === "string" ? raw.summaryAr : "تم تحليل العقد بالذكاء الاصطناعي.",
+      riskLevel,
+      keyTerms: {
+        paymentAmount: Number.isFinite(paymentAmountRaw) && paymentAmountRaw > 0 ? Number(paymentAmountRaw) : undefined,
+        paymentSchedule: typeof keyTermsRaw.paymentSchedule === "string" ? keyTermsRaw.paymentSchedule : undefined,
+        contractDuration: typeof keyTermsRaw.contractDuration === "string" ? keyTermsRaw.contractDuration : undefined,
+        terminationClause: typeof keyTermsRaw.terminationClause === "string" ? keyTermsRaw.terminationClause : undefined,
+      },
+      flags,
+    };
   }
 
   private buildTitleFromFilename(fileName: string): string {

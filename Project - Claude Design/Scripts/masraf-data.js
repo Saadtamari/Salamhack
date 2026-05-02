@@ -64,7 +64,7 @@ window.MASRAF_DATA = {
 
   zakat: {
     totalAssets: 28400,
-    nisab: 5200,
+    nisab: 8400,
     eligible: 12840.50,
     rate: 0.025,
     amount: 321,

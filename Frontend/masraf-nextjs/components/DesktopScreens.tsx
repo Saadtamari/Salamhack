@@ -836,97 +836,121 @@ export function DesktopContracts({ toast }: {
 }
 
 // ─── Desktop Reports ──────────────────────────────────────────────────────────
-async function downloadReportPdf(input: {
-  data: typeof DD;
+function buildReportHtml(input: {
+  DD: typeof MASRAF_DATA & { stats: { totalIncome: number; totalExpenses: number; pending: number; overdue: number }; cashflow: { month: string; income: number; expenses: number }[]; invoices: { status: string }[] };
   business: string;
-  connected: boolean;
-  refetch: () => Promise<void>;
-  toast?: (msg: string, type?: string) => void;
+  currency: string;
 }) {
-  const { data: DD, business, connected, refetch, toast } = input;
-  const win = window.open("", "_blank", "width=820,height=1000");
-  if (!win) {
-    toast?.("يرجى السماح بالنوافذ المنبثقة لتنزيل التقرير", "error");
-    return;
-  }
-  if (apiConfig.useBackend && connected) {
-    try {
-      const now = new Date();
-      const report = await masrafApi.reports.generate(now.getMonth() + 1, now.getFullYear());
-      const pdf = await masrafApi.reports.generatePdf({ reportId: report.id });
-      await refetch();
-      const pdfAny = pdf as typeof pdf & { url?: string; pdfUrl?: string; signedUrl?: string; downloadUrl?: string; pdfDataUrl?: string };
-      const url = pdfAny.url || pdfAny.pdfUrl || pdfAny.signedUrl || pdfAny.downloadUrl || pdfAny.pdfDataUrl;
-      if (url) {
-        win.location.href = url;
-        toast?.("تم توليد تقرير PDF من الخلفية", "success");
-        return;
-      }
-      throw new Error("No PDF URL returned");
-    } catch {
-      toast?.("تعذر توليد PDF من الخلفية، تم فتح نسخة الطباعة المحلية", "error");
-    }
-  }
+  const { DD, business, currency } = input;
   const fmtN = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
-  const currency = activeCurrency();
+  const money = (v: number) => `${fmtN(v)} ${currency}`;
   const net = DD.stats.totalIncome - DD.stats.totalExpenses;
-  const money = (value: number) => `${fmtN(value)} ${currency}`;
-  const html = `<!DOCTYPE html>
+  const paidCount = DD.invoices.filter((i) => i.status === "paid").length;
+  const totalCount = DD.invoices.length;
+
+  // deltas from last two cashflow months
+  const cf = DD.cashflow;
+  const last = cf[cf.length - 1];
+  const prev = cf[cf.length - 2];
+  const pctOf = (a: number, b: number) => b > 0 ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%` : "—";
+  const incomeDelta = last && prev ? pctOf(last.income, prev.income) : "—";
+  const expenseDelta = last && prev ? pctOf(last.expenses, prev.expenses) : "—";
+  const netLast = last ? last.income - last.expenses : 0;
+  const netPrev = prev ? prev.income - prev.expenses : 0;
+  const netDelta = last && prev ? pctOf(netLast, Math.abs(netPrev)) : "—";
+  const expenseIsUp = last && prev ? last.expenses > prev.expenses : false;
+
+  // dynamic month label
+  const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const now = new Date();
+  const monthLabel = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+  // cashflow bars
+  const maxVal = Math.max(...cf.map((c) => Math.max(c.income, c.expenses)), 1);
+  const cfRows = cf.map((c) => `
+    <div class="cf-row">
+      <span class="cf-month">${c.month}</span>
+      <div class="cf-bars">
+        <div class="cf-bar income" style="width:${Math.round((c.income / maxVal) * 100)}%"><span>${fmtN(c.income)}</span></div>
+        <div class="cf-bar expense" style="width:${Math.round((c.expenses / maxVal) * 100)}%"><span>${fmtN(c.expenses)}</span></div>
+      </div>
+    </div>`).join("");
+
+  return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8">
-<title>تقرير أبريل ٢٠٢٦ — مصرف</title>
+<title>التقارير — مصرف</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;background:#FAFAF8;color:#2A2520;padding:32px 24px}
-.wrap{max-width:720px;margin:0 auto}
-.print-btn{display:block;width:100%;padding:12px;background:#1B5E20;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:20px;font-family:inherit}
-.header{background:linear-gradient(135deg,#1B5E20,#0D3B0F);border-radius:18px;padding:28px 32px;color:white;margin-bottom:24px}
-.header h1{font-size:28px;font-weight:900;margin-bottom:4px}
-.header p{font-size:14px;opacity:0.75}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.kpi{background:white;border:1px solid #E8DFCF;border-radius:14px;padding:18px 20px}
-.kpi-label{font-size:11px;color:#92897C;margin-bottom:6px}
+body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;background:#F7F4EE;color:#11100E;padding:28px 20px}
+.wrap{max-width:760px;margin:0 auto}
+.print-btn{display:block;width:100%;padding:12px;background:#11100E;color:#FFFDF8;border:none;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:20px;font-family:inherit}
+.page-title{font-size:24px;font-weight:900;color:#11100E;margin-bottom:20px}
+.banner{background:linear-gradient(135deg,#1B5E20,#0D3B0F);border-radius:20px;padding:24px;margin-bottom:24px;color:#FFFDF8;position:relative;overflow:hidden}
+.banner::before{content:'';position:absolute;inset:0;opacity:0.06;background-image:repeating-linear-gradient(60deg,transparent,transparent 18px,rgba(255,255,255,.15) 18px,rgba(255,255,255,.15) 19px),repeating-linear-gradient(-60deg,transparent,transparent 18px,rgba(255,255,255,.15) 18px,rgba(255,255,255,.15) 19px)}
+.banner-sub{font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:4px;position:relative}
+.banner-text{font-size:15px;line-height:1.8;position:relative}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.kpi{background:#FFFDF8;border:1px solid #DDD6CA;border-radius:16px;padding:18px 20px}
+.kpi-label{font-size:12px;color:#92897C;margin-bottom:6px}
 .kpi-value{font-size:22px;font-weight:900;color:#11100E}
 .kpi-delta{font-size:12px;font-weight:700;margin-top:4px}
-.section{background:white;border:1px solid #E8DFCF;border-radius:18px;padding:24px;margin-bottom:18px}
-.section h2{font-size:15px;font-weight:800;color:#11100E;margin-bottom:16px}
-.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F4EDE0;font-size:14px}
-.row:last-child{border-bottom:none}
-.grand{border-top:2px solid #1B5E20;margin-top:8px;padding-top:12px;display:flex;justify-content:space-between;font-size:16px;font-weight:800}
-.ai-box{background:#F0F7F0;border:1px solid #C8E6C9;border-radius:14px;padding:16px;font-size:13px;color:#1B5E20;line-height:1.8}
+.chart-card{background:#FFFDF8;border:1px solid #DDD6CA;border-radius:20px;padding:24px}
+.chart-title{font-size:16px;font-weight:800;color:#11100E;margin-bottom:16px}
+.cf-row{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.cf-month{font-size:11px;color:#92897C;text-align:right}
+.cf-bars{display:flex;flex-direction:column;gap:3px}
+.cf-bar{height:14px;border-radius:7px;min-width:4px;display:flex;align-items:center;padding-right:8px}
+.cf-bar span{font-size:10px;color:rgba(255,255,255,0.9);white-space:nowrap}
+.income{background:#1B5E20}
+.expense{background:#9C7614}
+.cf-legend{display:flex;gap:16px;margin-top:12px;font-size:11px;color:#6D675E}
+.cf-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:5px;vertical-align:middle}
 .footer{text-align:center;margin-top:24px;font-size:11px;color:#B8AC97;letter-spacing:1.5px;text-transform:uppercase}
-@media print{.print-btn{display:none}body{padding:0}@page{margin:16px}}
+@media print{.print-btn{display:none}body{padding:0;background:#fff}@page{margin:14px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <button class="print-btn" onclick="window.print()">طباعة / حفظ كـ PDF ↓</button>
-<div class="header">
-  <h1>تقرير أبريل ٢٠٢٦</h1>
-  <p>مصرف — التقرير المالي الشهري · ${business}</p>
+<div class="page-title">التقارير</div>
+<div class="banner">
+  <div class="banner-sub">ملخص ${monthLabel} — الذكاء الاصطناعي</div>
+  <div class="banner-text">أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك ارتفع <strong>${incomeDelta}</strong> مقارنة بالشهر الماضي. لديك <strong>${DD.invoices.filter((i) => i.status === "overdue").length} فاتورة متأخرة</strong> تحتاج متابعة. مصاريفك <strong>${money(DD.stats.totalExpenses)}</strong> بنسبة <strong>${Math.round((DD.stats.totalExpenses / (DD.stats.totalIncome || 1)) * 100)}٪</strong> من الدخل.</div>
 </div>
 <div class="kpis">
-  <div class="kpi"><div class="kpi-label">إجمالي الدخل</div><div class="kpi-value">${money(DD.stats.totalIncome)}</div><div class="kpi-delta" style="color:#1B5E20">+67%</div></div>
-  <div class="kpi"><div class="kpi-label">إجمالي المصاريف</div><div class="kpi-value">${money(DD.stats.totalExpenses)}</div><div class="kpi-delta" style="color:#B3261E">+8%</div></div>
-  <div class="kpi"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${money(net)}</div><div class="kpi-delta" style="color:#1B5E20">+82%</div></div>
-  <div class="kpi"><div class="kpi-label">فواتير مدفوعة</div><div class="kpi-value">٢</div><div class="kpi-delta" style="color:#9C7614">من ٦</div></div>
+  <div class="kpi"><div class="kpi-label">إجمالي الدخل</div><div class="kpi-value">${money(DD.stats.totalIncome)}</div><div class="kpi-delta" style="color:#11100E">${incomeDelta}</div></div>
+  <div class="kpi"><div class="kpi-label">إجمالي المصاريف</div><div class="kpi-value">${money(DD.stats.totalExpenses)}</div><div class="kpi-delta" style="color:${expenseIsUp ? "#B3261E" : "#11100E"}">${expenseDelta}</div></div>
+  <div class="kpi"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${money(net)}</div><div class="kpi-delta" style="color:#11100E">${netDelta}</div></div>
+  <div class="kpi"><div class="kpi-label">فواتير مدفوعة</div><div class="kpi-value">${fmtN(paidCount)}</div><div class="kpi-delta" style="color:#9C7614">من ${fmtN(totalCount)}</div></div>
 </div>
-<div class="section">
-  <h2>الملخص المالي</h2>
-  <div class="row"><span style="color:#6D675E">إجمالي الدخل</span><span style="font-weight:700">${money(DD.stats.totalIncome)}</span></div>
-  <div class="row"><span style="color:#6D675E">إجمالي المصاريف</span><span style="font-weight:700">${money(DD.stats.totalExpenses)}</span></div>
-  <div class="row"><span style="color:#6D675E">فواتير معلقة</span><span style="font-weight:700">${money(DD.stats.pending)}</span></div>
-  <div class="grand"><span>صافي الربح</span><span style="color:#1B5E20">${money(net)}</span></div>
+<div class="chart-card">
+  <div class="chart-title">التدفق النقدي — ${fmtN(cf.length)} أشهر</div>
+  ${cfRows}
+  <div class="cf-legend">
+    <span><span class="cf-dot" style="background:#1B5E20"></span>دخل</span>
+    <span><span class="cf-dot" style="background:#9C7614"></span>مصاريف</span>
+  </div>
 </div>
-<div class="section">
-  <h2>ملخص الذكاء الاصطناعي</h2>
-  <div class="ai-box">أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك ارتفع <strong>٦٧٪</strong> مقارنة بمارس وهو أعلى مستوى في ٦ أشهر. لديك <strong>عميلان</strong> يحتاجان متابعة تحصيل عاجلة. مصاريفك في حدود معقولة (<strong>٣١٪</strong> من الدخل).</div>
-</div>
-<div class="footer">مصرف · Masraf · تقرير أبريل ٢٠٢٦ · Sharia-Compliant</div>
+<div class="footer">مصرف · Masraf · ${business} · Sharia-Compliant</div>
 </div>
 </body>
 </html>`;
+}
+
+function downloadReportPdf(input: {
+  data: typeof MASRAF_DATA & { stats: { totalIncome: number; totalExpenses: number; pending: number; overdue: number }; cashflow: { month: string; income: number; expenses: number }[]; invoices: { status: string }[] };
+  business: string;
+  toast?: (msg: string, type?: string) => void;
+}) {
+  const { data: DD, business, toast } = input;
+  const win = window.open("", "_blank", "width=820,height=1000");
+  if (!win) {
+    toast?.("يرجى السماح بالنوافذ المنبثقة لتنزيل التقرير", "error");
+    return;
+  }
+  const html = buildReportHtml({ DD, business, currency: activeCurrency() });
   win.document.write(html);
   win.document.close();
   win.focus();
@@ -936,12 +960,35 @@ body{font-family:'Segoe UI','Arial',system-ui,sans-serif;direction:rtl;backgroun
 export function DesktopReports({ toast }: {
   toast?: (msg: string, type?: string) => void;
 }) {
-  const { data: DD, profile, connected, refetch } = useMasrafApp();
+  const { data: DD, profile } = useMasrafApp();
+
+  // compute deltas from last two cashflow months
+  const cf = DD.cashflow;
+  const last = cf[cf.length - 1];
+  const prev = cf[cf.length - 2];
+  const pctOf = (a: number, b: number) => b > 0 ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%` : "—";
+  const incomeDelta   = last && prev ? pctOf(last.income,   prev.income)   : "—";
+  const expenseDelta  = last && prev ? pctOf(last.expenses, prev.expenses) : "—";
+  const netLast       = last ? last.income - last.expenses : 0;
+  const netPrev       = prev ? prev.income - prev.expenses : 0;
+  const netDelta      = last && prev ? pctOf(netLast, Math.abs(netPrev)) : "—";
+  const expenseIsUp   = last && prev ? last.expenses > prev.expenses : false;
+  const paidCount     = DD.invoices.filter((i) => i.status === "paid").length;
+  const totalCount    = DD.invoices.length;
+  const overdueCount  = DD.invoices.filter((i) => i.status === "overdue").length;
+  const expensePct    = Math.round((DD.stats.totalExpenses / (DD.stats.totalIncome || 1)) * 100);
+  const fmtAr         = (n: number) => new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n);
+
+  // dynamic month label
+  const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const now = new Date();
+  const monthLabel = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 900, color: "#11100E" }}>التقارير</div>
-        <button onClick={() => void downloadReportPdf({ data: DD, business: profile.business, connected, refetch, toast })} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => void downloadReportPdf({ data: DD, business: profile.business, toast })} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)", display: "inline-flex", alignItems: "center", gap: 8 }}>
           <MasrafIcon icon={Download01Icon} size={17} color="currentColor" />
           تنزيل PDF
         </button>
@@ -951,10 +998,10 @@ export function DesktopReports({ toast }: {
       <div style={{ background: "linear-gradient(135deg, #1B5E20, #0D3B0F)", borderRadius: 20, padding: "24px", marginBottom: 24, color: "white", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.06} />
         <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>ملخص أبريل ٢٠٢٦ — الذكاء الاصطناعي</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>ملخص {monthLabel} — الذكاء الاصطناعي</div>
           <div style={{ fontSize: 15, lineHeight: 1.8, maxWidth: 700 }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}><MasrafIcon icon={AiVoiceIcon} size={15} color="#A5D6A7" /></span>
-            أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك ارتفع <strong>٦٧٪</strong> مقارنة بمارس وهو أعلى مستوى في ٦ أشهر. لديك <strong>عميلان</strong> يحتاجان متابعة تحصيل عاجلة. مصاريفك في حدود معقولة (<strong>٣١٪</strong> من الدخل).
+            أداؤك المالي هذا الشهر <strong>ممتاز</strong>. دخلك {incomeDelta !== "—" ? <>ارتفع <strong>{incomeDelta}</strong></> : "لا يوجد بيانات كافية"} مقارنة بالشهر الماضي. لديك <strong>{fmtAr(overdueCount)} {overdueCount === 1 ? "فاتورة متأخرة" : "فواتير متأخرة"}</strong> تحتاج متابعة. مصاريفك في حدود معقولة (<strong>{fmtAr(expensePct)}٪</strong> من الدخل).
           </div>
         </div>
       </div>
@@ -962,10 +1009,10 @@ export function DesktopReports({ toast }: {
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
         {[
-          { l: "إجمالي الدخل",    v: fmt(DD.stats.totalIncome),                           d: "+67%", pos: true  },
-          { l: "إجمالي المصاريف", v: fmt(DD.stats.totalExpenses),                         d: "+8%",  pos: false },
-          { l: "صافي الربح",      v: fmt(DD.stats.totalIncome - DD.stats.totalExpenses),  d: "+82%", pos: true  },
-          { l: "فواتير مدفوعة",   v: "٢",                                                 d: "من ٦", pos: true  },
+          { l: "إجمالي الدخل",    v: fmt(DD.stats.totalIncome),                          d: incomeDelta,           pos: !(incomeDelta.startsWith("-"))  },
+          { l: "إجمالي المصاريف", v: fmt(DD.stats.totalExpenses),                        d: expenseDelta,          pos: !expenseIsUp                    },
+          { l: "صافي الربح",      v: fmt(DD.stats.totalIncome - DD.stats.totalExpenses), d: netDelta,              pos: !(netDelta.startsWith("-"))      },
+          { l: "فواتير مدفوعة",   v: fmtAr(paidCount),                                   d: `من ${fmtAr(totalCount)}`, pos: true                        },
         ].map((s) => (
           <div key={s.l} style={{ background: "#FFFDF8", borderRadius: 16, padding: "18px 20px", border: "1px solid #DDD6CA" }}>
             <div style={{ fontSize: 12, color: "#92897C", marginBottom: 6 }}>{s.l}</div>

@@ -34,6 +34,7 @@ Available tools:
 - invoices.create_draft args: { "clientName": string, "clientId": string, "title": string, "amount": number, "currency": string, "paymentTerms": "immediate|net_7|net_15|net_30|net_60|murabaha|musharakah", "dueDate": "YYYY-MM-DD", "items": [{ "description": string, "quantity": number, "unitPrice": number }] }
 - invoices.send args: { "invoiceId": string, "invoiceNumber": string }
 - invoices.send_reminder args: { "invoiceId": string, "invoiceNumber": string, "clientName": string, "amount": number, "currency": string, "dueDate": string, "daysOverdue": number, "tone": "soft|firm" }
+- invoices.download args: { "invoiceId": string, "invoiceNumber": string } — opens invoice as PDF in a new tab; both args optional (defaults to latest invoice)
 - zakat.calculate args: { "qualifyingAssets": number, "totalIncome": number, "nisabThreshold": number, "currency": string }
 - reports.generate args: { "month": number, "year": number }
 

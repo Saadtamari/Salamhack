@@ -141,7 +141,7 @@ const invoiceReminderArgsSchema = z.object({
 const zakatCalculateArgsSchema = z.object({
   qualifyingAssets: z.coerce.number().nonnegative().optional(),
   totalIncome: z.coerce.number().nonnegative().optional(),
-  nisabThreshold: z.coerce.number().positive().default(5200),
+  nisabThreshold: z.coerce.number().positive().default(8400),
   zakatRate: z.coerce.number().positive().default(0.025),
   currency: currencySchema.default("USD"),
 }).refine((value) => value.qualifyingAssets !== undefined || value.totalIncome !== undefined, {
@@ -151,6 +151,11 @@ const zakatCalculateArgsSchema = z.object({
 const reportGenerateArgsSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
   year: z.coerce.number().int().min(2020).max(2100),
+});
+
+const invoiceDownloadArgsSchema = z.object({
+  invoiceId: optionalTextSchema,
+  invoiceNumber: optionalTextSchema,
 });
 
 type ValidationResult =
@@ -219,6 +224,8 @@ export class AgentExecutor {
         return this.executeCalculateZakat(validation.action.args);
       case "reports.generate":
         return this.executeGenerateReport(validation.action.args);
+      case "invoices.download":
+        return this.executeDownloadInvoice(validation.action.args);
       default:
         return {
           executed: false,
@@ -252,6 +259,8 @@ export class AgentExecutor {
         return zakatCalculateArgsSchema.safeParse(args);
       case "reports.generate":
         return reportGenerateArgsSchema.safeParse(args);
+      case "invoices.download":
+        return invoiceDownloadArgsSchema.safeParse(args);
     }
   }
 
@@ -470,6 +479,45 @@ export class AgentExecutor {
       data: parsed,
       targetScreen: "reports",
       message: "إنشاء التقرير يحتاج خطوة تأكيد مخصصة قبل حفظه.",
+    };
+  }
+
+  private async executeDownloadInvoice(args: Record<string, unknown>): Promise<AgentActionResult> {
+    const parsed = invoiceDownloadArgsSchema.parse(args);
+    const invoice = await this.resolveInvoice(parsed.invoiceId ?? parsed.invoiceNumber, undefined);
+    const target = invoice
+      ?? (await withTimeout(this.invoicesService.list({}), 2000).catch(() => []))
+          .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())[0]
+      ?? null;
+
+    if (!target) {
+      return {
+        executed: false,
+        tool: "invoices.download",
+        targetScreen: "invoices",
+        message: "لم أجد أي فاتورة لتحميلها.",
+      };
+    }
+
+    return {
+      executed: true,
+      tool: "invoices.download",
+      data: {
+        invoiceId: target.id,
+        invoiceNumber: target.invoiceNumber,
+        title: target.titleAr ?? target.title,
+        titleEn: target.title,
+        totalAmount: Number(target.total),
+        subtotal: Number(target.subtotal ?? 0),
+        vatAmount: Number(target.vatAmount ?? 0),
+        currency: target.currency,
+        dueDate: target.dueDate ?? null,
+        status: target.status,
+        paymentTerms: target.paymentTerms,
+        pdfUrl: target.pdfUrl ?? null,
+      },
+      targetScreen: "invoices",
+      message: `فاتورة ${target.invoiceNumber} جاهزة للتحميل.`,
     };
   }
 

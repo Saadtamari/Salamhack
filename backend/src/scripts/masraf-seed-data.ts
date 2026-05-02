@@ -55,7 +55,7 @@ export const masrafSeedData = {
   ],
   zakat: {
     totalAssets: 28400,
-    nisab: 5200,
+    nisab: 8400,
     eligible: 12840.5,
     rate: 0.025,
     amount: 321,

@@ -332,6 +332,7 @@ export type AgentToolName =
   | "invoices.create_draft"
   | "invoices.send"
   | "invoices.send_reminder"
+  | "invoices.download"
   | "zakat.calculate"
   | "reports.generate";
 

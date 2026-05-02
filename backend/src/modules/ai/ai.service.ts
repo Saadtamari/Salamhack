@@ -516,7 +516,7 @@ export class AIService {
 
   private executeCalculateZakat(data: Record<string, unknown>) {
     const qualifyingAssets = asNumber(data.qualifyingAssets ?? data.totalIncome) ?? 0;
-    const nisabThreshold = asNumber(data.nisabThreshold) ?? 5200;
+    const nisabThreshold = asNumber(data.nisabThreshold) ?? 8400;
     const zakatRate = asNumber(data.zakatRate) ?? 0.025;
     const aboveNisab = qualifyingAssets >= nisabThreshold;
     const zakatAmount = aboveNisab ? qualifyingAssets * zakatRate : 0;

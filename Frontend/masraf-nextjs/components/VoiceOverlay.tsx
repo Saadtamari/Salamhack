@@ -12,6 +12,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { masrafApi } from "@/lib/api";
 import type { AgentAction, AgentHistoryMessage, AgentPage, AgentRunResult } from "@/lib/api/types";
+import { getRuntimeVoicePersona, type VoicePersona } from "@/lib/voice-preferences";
 import { MasrafIcon } from "./icons";
 
 type Phase = "idle" | "listening" | "processing" | "responding" | "error";
@@ -21,11 +22,13 @@ export function VoiceOverlay({
   onCommand,
   currentScreen,
   sessionData,
+  voicePersona,
 }: {
   onClose: () => void;
   onCommand: (type: string, payload: string) => void;
   currentScreen?: string;
   sessionData?: Record<string, unknown>;
+  voicePersona?: VoicePersona;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
@@ -128,7 +131,8 @@ export function VoiceOverlay({
       const type = chunks[0]?.type || "audio/webm";
       const blob = new Blob(chunks, { type });
       const file = new File([blob], `masraf-command-${Date.now()}.webm`, { type });
-      const response = await masrafApi.voice.process(file, agentContext(), true, historyRef.current, "fatima");
+      const activeVoice = voicePersona ?? getRuntimeVoicePersona();
+      const response = await masrafApi.voice.process(file, agentContext(), true, historyRef.current, activeVoice);
       const agent = response.agentResponse;
 
       setTranscript(response.transcript || "");
@@ -247,6 +251,7 @@ export function VoiceOverlay({
 
   const pendingAction = result?.status === "needs_confirmation" ? result.action : null;
   const targetScreen = result?.actionResult?.targetScreen ?? result?.plan.targetScreen;
+  const activeVoice = voicePersona ?? getRuntimeVoicePersona();
   const status = phase === "listening"
     ? "أستمع"
     : phase === "processing"
@@ -255,7 +260,7 @@ export function VoiceOverlay({
         ? "يحتاج انتباه"
         : result?.status === "needs_confirmation"
           ? "تأكيد الإجراء"
-          : "فاطمة · مساعدة مصرف";
+          : activeVoice === "fatima" ? "فاطمة · مساعدة مصرف" : "عبدالله · مساعد مصرف";
   const accent = phase === "responding" ? "#147A41" : phase === "processing" ? "#9C7614" : "#F0C542";
 
   return (

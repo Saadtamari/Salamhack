@@ -1,10 +1,18 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AiVoiceIcon, Camera01Icon } from "@hugeicons/core-free-icons";
 import { MASRAF_DATA } from "@/lib/data";
 import type { Invoice } from "@/lib/data";
 import { apiConfig, masrafApi } from "@/lib/api";
+import type { BackendPurificationRecord } from "@/lib/api";
+import { useMasrafApp } from "@/lib/masraf-context";
 import { MasrafIcon } from "./icons";
+
+function activeCurrency() {
+  return typeof globalThis !== "undefined"
+    ? ((globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY || MASRAF_DATA.user.currency)
+    : MASRAF_DATA.user.currency;
+}
 
 // ─── Invoice HTML Generator ──────────────────────────────────────────────────
 function fmtAr(n: number) {
@@ -100,10 +108,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
   onToast?: (msg: string, type?: string, title?: string) => void;
 }) {
   const [downloading, setDownloading] = useState(false);
-  const user = MASRAF_DATA.user;
-  const currency = typeof globalThis !== "undefined"
-    ? ((globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY || MASRAF_DATA.user.currency)
-    : MASRAF_DATA.user.currency;
+  const { profile, currency } = useMasrafApp();
   const symbols: Record<string, string> = { USD: "$", SAR: "ر.س", AED: "د.إ", JOD: "د.أ", EGP: "ج.م", KWD: "د.ك" };
   const sym = symbols[currency] || currency;
   const subtotal = invoice.amount / 1.16;
@@ -129,7 +134,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
       amount: invoice.amount,
       due: invoice.due,
       status: invoice.status,
-      business: user.business,
+      business: profile.business,
       currency,
       sym,
       subtotal,
@@ -167,7 +172,7 @@ export function InvoicePreviewModal({ invoice, onClose, onToast }: {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28, paddingBottom: 24, borderBottom: "1px solid #E8DFCF" }}>
             <div>
               <div style={{ fontSize: 10, color: "#B8AC97", marginBottom: 6, letterSpacing: 1.5, textTransform: "uppercase" }}>من / From</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2520" }}>{user.business}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#2A2520" }}>{profile.business}</div>
               <div style={{ fontSize: 12, color: "#8A7F6F", marginTop: 2 }}>الأردن · Jordan</div>
             </div>
             <div>
@@ -226,28 +231,35 @@ export function ChaserModal({ invoice, onClose, onToast }: {
   onClose: () => void;
   onToast?: (msg: string, type?: string) => void;
 }) {
+  const { profile, currency } = useMasrafApp();
   const [tone, setTone] = useState<"soft" | "firm">("soft");
   const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState("");
+  const fallbackMoney = `${new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(invoice.amount)} ${currency}`;
 
   const messages = {
-    soft: `السلام عليكم ورحمة الله وبركاته،\n\nأرجو أن تكونوا بخير. أودّ التذكير الودي بالفاتورة رقم ${invoice.id} بمبلغ ${invoice.amount} دولار والتي كان موعد استحقاقها ${invoice.due}.\n\nنتطلع لإتمام هذا الأمر في أقرب وقت ممكن. جزاكم الله خيراً.\n\nمع التقدير،\nأحمد الشمري`,
-    firm:  `تحية طيبة،\n\nنُذكّركم بضرورة تسوية الفاتورة رقم ${invoice.id} البالغة ${invoice.amount} دولار والمتأخرة منذ ${invoice.daysOverdue} يوماً.\n\nيُرجى التواصل فوراً لترتيب السداد وتجنّب أي تبعات إضافية.\n\nأحمد الشمري`,
+    soft: `السلام عليكم ورحمة الله وبركاته،\n\nأرجو أن تكونوا بخير. أودّ التذكير الودي بالفاتورة رقم ${invoice.id} بمبلغ ${fallbackMoney} والتي كان موعد استحقاقها ${invoice.due}.\n\nنتطلع لإتمام هذا الأمر في أقرب وقت ممكن. جزاكم الله خيراً.\n\nمع التقدير،\n${profile.name}`,
+    firm:  `تحية طيبة،\n\nنُذكّركم بضرورة تسوية الفاتورة رقم ${invoice.id} البالغة ${fallbackMoney} والمتأخرة منذ ${invoice.daysOverdue} يوماً.\n\nيُرجى التواصل فوراً لترتيب السداد وتجنّب أي تبعات إضافية.\n\n${profile.name}`,
   };
+
+  async function copyMessage() {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(message);
+    }
+    onToast?.("تم نسخ رسالة المتابعة. الإرسال الفعلي يتم من قناتك المختارة.", "success");
+    onClose();
+  }
 
   async function generate() {
     setGenerating(true);
     setMessage("");
     if (apiConfig.useBackend) {
       try {
-        const activeCurrency = typeof globalThis !== "undefined"
-          ? ((globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY || MASRAF_DATA.user.currency)
-          : MASRAF_DATA.user.currency;
         const result = await masrafApi.ai.generateChaser({
           clientName: invoice.client,
           invoiceNumber: invoice.id,
           amount: invoice.amount,
-          currency: activeCurrency,
+          currency,
           daysOverdue: invoice.daysOverdue,
           dueDate: invoice.due,
         });
@@ -287,8 +299,8 @@ export function ChaserModal({ invoice, onClose, onToast }: {
           <>
             <div style={{ background: "#F1EDE5", borderRadius: 14, padding: "14px 16px", fontSize: 13, color: "#11100E", lineHeight: 1.8, whiteSpace: "pre-line", marginBottom: 16, direction: "rtl" }}>{message}</div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => { onToast?.("تم إرسال رسالة المتابعة بنجاح", "success"); onClose(); }}
-                style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 12, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ أرسل الآن</button>
+              <button onClick={() => void copyMessage()}
+                style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 12, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>نسخ رسالة المتابعة</button>
               <button onClick={onClose} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 12, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>إلغاء</button>
             </div>
           </>
@@ -340,9 +352,10 @@ type ReceiptResult = {
   notes?: string;
 };
 
-export function ReceiptScanner({ onClose, onToast }: {
+export function ReceiptScanner({ onClose, onToast, onSaved }: {
   onClose: () => void;
   onToast?: (msg: string, type?: string) => void;
+  onSaved?: () => Promise<void> | void;
 }) {
   const [stage, setStage] = useState<"upload" | "scanning" | "result">("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -365,7 +378,7 @@ export function ReceiptScanner({ onClose, onToast }: {
           merchant: scan.merchantNameAr || scan.merchantName,
           amount: scan.amount,
           category: scan.category,
-          currency: scan.currency || MASRAF_DATA.user.currency,
+          currency: scan.currency || activeCurrency(),
           date: scan.transactionDate,
           halal: scan.isHalal,
           needsPurification: scan.needsPurification,
@@ -389,7 +402,7 @@ export function ReceiptScanner({ onClose, onToast }: {
         merchant: "مطعم الرياض",
         amount: 42,
         category: "food_dining",
-        currency: MASRAF_DATA.user.currency,
+        currency: activeCurrency(),
         date: new Date().toISOString().slice(0, 10),
         halal: true,
         needsPurification: false,
@@ -416,6 +429,7 @@ export function ReceiptScanner({ onClose, onToast }: {
           needsPurification: result.needsPurification,
           reference: selectedFile?.name,
         });
+        await onSaved?.();
         onToast?.("تم إضافة المصروف في الخلفية بنجاح", "success");
         onClose();
         return;
@@ -525,18 +539,61 @@ export function ReceiptScanner({ onClose, onToast }: {
 
 // ─── Purification Ledger ──────────────────────────────────────────────────────
 export function PurificationLedger() {
+  const { connected, refetch, currency } = useMasrafApp();
   const [showAdd, setShowAdd] = useState(false);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [charity, setCharity] = useState("");
-  const [records, setRecords] = useState([
+  const [records, setRecords] = useState<{
+    id: string | number;
+    backendId?: string;
+    amount: number;
+    reason: string;
+    date: string;
+    purified: boolean;
+    charity: string;
+  }[]>([
     { id: 1, amount: 32, reason: "عمولة مشبوهة المصدر",  date: "مارس ٢٠٢٦",   purified: true,  charity: "جمعية الأيتام الأردنية" },
     { id: 2, amount: 18, reason: "معاملة غير مصنّفة",    date: "فبراير ٢٠٢٦", purified: false, charity: "" },
   ]);
 
-  function addRecord() {
+  function mapBackendRecord(record: BackendPurificationRecord) {
+    return {
+      id: record.id,
+      backendId: record.id,
+      amount: Number(record.amount) || 0,
+      reason: record.reasonAr || record.reason || "مبلغ يحتاج تطهيراً",
+      date: record.createdAt ? new Date(record.createdAt).toLocaleDateString("ar-SA") : "—",
+      purified: record.purified,
+      charity: record.charityDestination || "",
+    };
+  }
+
+  useEffect(() => {
+    let active = true;
+    if (!apiConfig.useBackend || !connected) return () => { active = false; };
+    void masrafApi.purification.list()
+      .then((rows) => {
+        if (active) setRecords(rows.map(mapBackendRecord));
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [connected]);
+
+  async function addRecord() {
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) return;
+    if (apiConfig.useBackend && connected) {
+      const created = await masrafApi.purification.create({
+        amount: value,
+        reason: reason.trim() || "Amount needing purification",
+        reasonAr: reason.trim() || "مبلغ يحتاج تطهيراً",
+        purified: Boolean(charity.trim()),
+        charityDestination: charity.trim() || null,
+      });
+      setRecords((current) => [mapBackendRecord(created), ...current]);
+      await refetch();
+    } else {
     setRecords((current) => [
       {
         id: Date.now(),
@@ -548,10 +605,29 @@ export function PurificationLedger() {
       },
       ...current,
     ]);
+    }
     setAmount("");
     setReason("");
     setCharity("");
     setShowAdd(false);
+  }
+
+  async function markPurified(record: { id: string | number; backendId?: string }) {
+    if (record.backendId && apiConfig.useBackend && connected) {
+      const updated = await masrafApi.purification.markPurified(record.backendId, charity || "صدقة");
+      setRecords((current) => current.map((item) => item.id === record.id ? mapBackendRecord(updated) : item));
+      await refetch();
+      return;
+    }
+    setRecords((current) => current.map((item) => item.id === record.id ? { ...item, purified: true, charity: "صدقة" } : item));
+  }
+
+  async function deleteRecord(record: { id: string | number; backendId?: string }) {
+    if (record.backendId && apiConfig.useBackend && connected) {
+      await masrafApi.purification.delete(record.backendId);
+      await refetch();
+    }
+    setRecords((current) => current.filter((item) => item.id !== record.id));
   }
 
   return (
@@ -567,10 +643,14 @@ export function PurificationLedger() {
               {r.purified && <div style={{ fontSize: 11, color: "#1B5E20", marginTop: 2 }}>✓ {r.charity}</div>}
             </div>
             <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#9C7614" }}>${r.amount}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#9C7614" }}>{r.amount} {currency}</div>
               <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: r.purified ? "#E8F5E9" : "#FFF9E8", color: r.purified ? "#1B5E20" : "#9C7614", fontWeight: 700 }}>
                 {r.purified ? "مُطهَّر" : "معلق"}
               </span>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                {!r.purified && <button onClick={() => void markPurified(r)} style={{ border: "none", background: "#E8F5E9", color: "#1B5E20", borderRadius: 8, padding: "4px 8px", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>طهّر</button>}
+                <button onClick={() => void deleteRecord(r)} style={{ border: "none", background: "#FFF1EF", color: "#B3261E", borderRadius: 8, padding: "4px 8px", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>حذف</button>
+              </div>
             </div>
           </div>
         ))}

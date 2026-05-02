@@ -1,6 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
-import { MASRAF_DATA } from "@/lib/data";
+import React, { useMemo, useState } from "react";
 import {
   Agreement01Icon,
   AiVoiceIcon,
@@ -18,8 +17,11 @@ import { useToast } from "@/lib/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
 import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
-import { apiConfig, useBackendHealth, useMasrafBackend } from "@/lib/api";
+import { apiConfig, useBackendHealth } from "@/lib/api";
 import { buildAgentSessionSnapshot } from "@/lib/api/agent-context";
+import { DEFAULT_GUEST_BUSINESS, DEFAULT_GUEST_NAME, profileInitials, type UserProfilePreference } from "@/lib/app-preferences";
+import { MasrafProvider, useMasrafApp } from "@/lib/masraf-context";
+import type { VoicePersona } from "@/lib/voice-preferences";
 import { IslamicPattern } from "@/components/ui";
 import {
   DesktopDashboard, DesktopInvoices, DesktopClients,
@@ -63,10 +65,10 @@ function SidebarPattern() {
   );
 }
 
-function DesktopOnboarding({ onDone }: { onDone: () => void }) {
+function DesktopOnboarding({ onDone }: { onDone: (profile: Partial<UserProfilePreference>) => void }) {
   const [step, setStep] = useState(0);
   const [persona, setPersona] = useState("abdullahai");
-  const [form, setForm] = useState({ name: "", business: "", type: "freelancer", currency: "USD", vat: "16" });
+  const [form, setForm] = useState({ name: DEFAULT_GUEST_NAME, business: DEFAULT_GUEST_BUSINESS, type: "freelancer", currency: "USD", vat: "16" });
   const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 16px", border: "1px solid #E8E5DE", borderRadius: 14, fontSize: 15, fontFamily: "var(--font-ar)", direction: "rtl", background: "#FAFAF8", outline: "none", color: "#1A1A18" };
   const steps = [
     {
@@ -159,7 +161,7 @@ function DesktopOnboarding({ onDone }: { onDone: () => void }) {
           <div key={step} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.22s ease-out" }}>{current.content}</div>
           <div style={{ display: "flex", gap: 12, marginTop: 32, width: "100%", maxWidth: 480 }}>
             {step > 0 && <button onClick={() => setStep((value) => value - 1)} style={{ flex: 1, background: "#F5F5F0", color: "#1A1A18", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>رجوع</button>}
-            <button onClick={() => step < steps.length - 1 ? setStep((value) => value + 1) : onDone()} style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>{step < steps.length - 1 ? "التالي" : "ابدأ استخدام مصرف ✓"}</button>
+            <button onClick={() => step < steps.length - 1 ? setStep((value) => value + 1) : onDone({ name: form.name, business: form.business, businessType: form.type, currency: form.currency, vat: form.vat, voicePersona: persona as VoicePersona })} style={{ flex: 2, background: "#1B5E20", color: "white", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>{step < steps.length - 1 ? "التالي" : "ابدأ استخدام مصرف ✓"}</button>
           </div>
         </div>
       </div>
@@ -167,24 +169,14 @@ function DesktopOnboarding({ onDone }: { onDone: () => void }) {
   );
 }
 
-export default function MasrafDesktopApp() {
+function MasrafDesktopShell() {
   const [screen, setScreen] = useState<Page>("dashboard");
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [currency, setCurrency] = useState(MASRAF_DATA.user.currency);
   const backendHealth = useBackendHealth();
-  const backend = useMasrafBackend();
+  const { data, refetch, profile, updateProfile, currency, voicePersona, usingMock, error } = useMasrafApp();
   const { toasts, toast } = useToast();
-  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(backend.data), [backend.data]);
-
-  useEffect(() => {
-    (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY = currency;
-  }, [currency]);
-
-  useEffect(() => {
-    Object.assign(MASRAF_DATA, backend.data);
-    void Promise.resolve().then(() => setCurrency(backend.data.user.currency));
-  }, [backend.data]);
+  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(data, currency), [data, currency]);
 
   function navigate(page: string) {
     setScreen(page as Page);
@@ -198,12 +190,15 @@ export default function MasrafDesktopApp() {
     zakat:     <DesktopZakat     toast={toast} />,
     contracts: <DesktopContracts toast={toast} />,
     reports:   <DesktopReports   toast={toast} />,
-    notifications: <DesktopNotifications toast={toast} />,
-    settings: <DesktopSettings toast={toast} currency={currency} onCurrencyChange={setCurrency} />,
+    notifications: <DesktopNotifications toast={toast} onNavigate={navigate} />,
+    settings: <DesktopSettings toast={toast} />,
   };
 
   if (showOnboarding) {
-    return <DesktopOnboarding onDone={() => setShowOnboarding(false)} />;
+    return <DesktopOnboarding onDone={(onboardingProfile) => {
+      updateProfile(onboardingProfile);
+      setShowOnboarding(false);
+    }} />;
   }
 
   return (
@@ -256,10 +251,10 @@ export default function MasrafDesktopApp() {
           </button>
 
           <div onClick={() => setScreen("settings")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "rgba(198,163,90,0.06)", cursor: "pointer" }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "#C6A35A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#0F3D29" }}>أش</div>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "#C6A35A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#0F3D29" }}>{profileInitials(profile)}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#F4EDE0" }}>أحمد الشمري</div>
-              <div style={{ fontSize: 10, color: "rgba(244,237,224,0.52)" }}>شمري للتصميم</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#F4EDE0" }}>{profile.name}</div>
+              <div style={{ fontSize: 10, color: "rgba(244,237,224,0.52)" }}>{profile.business}</div>
             </div>
           </div>
         </div>
@@ -287,6 +282,11 @@ export default function MasrafDesktopApp() {
           <button onClick={() => setScreen("settings")} style={{ height: 42, background: screen === "settings" ? "#0F3D29" : "#FFFFFF", border: "1px solid #E8DFCF", borderRadius: 12, padding: "0 16px", fontSize: 13, fontWeight: 800, color: screen === "settings" ? "#F4EDE0" : "#5C5346", cursor: "pointer", fontFamily: "var(--font-ar)" }}>الإعدادات</button>
         </header>
         <div style={{ flex: 1, overflow: "auto", padding: "32px" }}>
+          {(error || usingMock) && (
+            <div style={{ marginBottom: 16, background: error ? "#FFF9E8" : "#F0F7F0", border: `1px solid ${error ? "#FFE0A3" : "#C8E6C9"}`, color: error ? "#8A6400" : "#1B5E20", borderRadius: 12, padding: "10px 14px", fontSize: 12, fontWeight: 800 }}>
+              {error ? `بيانات جزئية من الخلفية: ${error}` : "وضع العرض التجريبي مفعل، الإجراءات تحفظ محلياً فقط."}
+            </div>
+          )}
           <div key={`${screen}-${currency}`} style={{ animation: "fadeIn 0.2s ease-out" }}>
             {screenMap[screen]}
           </div>
@@ -303,14 +303,23 @@ export default function MasrafDesktopApp() {
         <VoiceOverlay
           currentScreen={screen}
           sessionData={agentSessionData}
+          voicePersona={voicePersona}
           onClose={() => setVoiceOpen(false)}
           onCommand={(type, payload) => {
             if (type === "navigate") navigate(payload);
-            if (type === "refresh") void backend.refetch();
+            if (type === "refresh") void refetch();
             if (type !== "refresh") setVoiceOpen(false);
           }}
         />
       )}
     </div>
+  );
+}
+
+export default function MasrafDesktopApp() {
+  return (
+    <MasrafProvider>
+      <MasrafDesktopShell />
+    </MasrafProvider>
   );
 }

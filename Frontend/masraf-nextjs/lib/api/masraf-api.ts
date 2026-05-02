@@ -93,6 +93,10 @@ export const masrafApi = {
     list: (query?: { year?: number }) => apiRequest<BackendReport[]>("/api/reports", { query }),
     get: (id: string) => apiRequest<BackendReport>(`/api/reports/${id}`),
     generate: (month: number, year: number) => apiRequest<BackendReport>("/api/reports/generate", { method: "POST", body: { month, year } }),
+    generatePdf: (input: { reportId?: string; month?: number; year?: number }) =>
+      input.reportId
+        ? apiRequest<PdfResult>(`/api/reports/${input.reportId}/pdf`)
+        : apiRequest<PdfResult>("/api/reports/pdf", { method: "POST", body: { month: input.month, year: input.year } }),
   },
 
   ai: {
@@ -133,12 +137,12 @@ export const masrafApi = {
         method: "POST",
         formData: toFormData({ audio: file, language }),
       }),
-    process: (file: File, context?: AgentContext, executeAction = true, history?: AgentHistoryMessage[], voice = "fatima") =>
+    process: (file: File, context?: AgentContext, executeAction = true, history?: AgentHistoryMessage[], voice = "abdullahai") =>
       apiRequest<VoiceProcessResult>("/api/voice/process", {
         method: "POST",
         formData: toFormData({ audio: file, context, executeAction, history, voice }),
       }),
-    synthesize: (text: string, voice = "fatima") => apiBinary("/api/voice/synthesize", { method: "POST", body: { text, voice } }),
+    synthesize: (text: string, voice = "abdullahai") => apiBinary("/api/voice/synthesize", { method: "POST", body: { text, voice } }),
   },
 
   storage: {

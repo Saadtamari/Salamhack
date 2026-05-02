@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { logout as authLogout } from "@/lib/auth";
 import {
   Alert02Icon,
@@ -16,6 +16,9 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { MASRAF_DATA } from "@/lib/data";
+import { apiConfig, masrafApi } from "@/lib/api";
+import { profileInitials } from "@/lib/app-preferences";
+import { useMasrafApp } from "@/lib/masraf-context";
 import { fmt, IslamicPattern, Avatar, StatusBadge, RiskBadge, MiniChart, DonutChart, RunwayIndicator, HalalBadge } from "./ui";
 import { MasrafIcon } from "./icons";
 import { InvoicePreviewModal, ChaserModal, ReceiptScanner, PurificationLedger } from "./Modals";
@@ -31,6 +34,7 @@ export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
   void toast;
+  const { data: D, profile } = useMasrafApp();
   const overdue = D.invoices.filter((i) => i.status === "overdue");
   const quickActions: { icon: IconSvgElement; label: string; page: Page }[] = [
     { icon: Invoice03Icon, label: "فاتورة جديدة", page: "invoices" },
@@ -52,10 +56,10 @@ export function DashboardScreen({ onNavigate, showBalance = true, toast }: {
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Avatar initials="أش" size={36} color="#FFFDF8" />
+              <Avatar initials={profileInitials(profile)} size={36} color="#FFFDF8" />
               <div>
                 <div style={{ fontSize: 12, color: "#D8D0C2", lineHeight: 1 }}>مرحباً،</div>
-                <div style={{ fontSize: 14, color: "#FFFDF8", fontWeight: 600 }}>{D.user.name}</div>
+                <div style={{ fontSize: 14, color: "#FFFDF8", fontWeight: 600 }}>{profile.name}</div>
               </div>
             </div>
             <button style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 12, width: 36, height: 36, color: "white", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>🔔</button>
@@ -156,6 +160,7 @@ export function InvoicesScreen({ onNavigate, toast }: {
   toast?: (msg: string, type?: string, title?: string) => void;
 }) {
   void onNavigate;
+  const { data: D, connected, usingMock, refetch } = useMasrafApp();
   const [filter, setFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [previewInv, setPreviewInv] = useState<Invoice | null>(null);
@@ -218,18 +223,62 @@ export function InvoicesScreen({ onNavigate, toast }: {
 
       <button onClick={() => setShowCreate(true)} style={{ position: "fixed", bottom: 90, left: 20, width: 52, height: 52, borderRadius: "50%", background: "#1B5E20", border: "none", color: "white", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(27,94,32,0.4)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
 
-      {showCreate  && <CreateInvoiceModal onClose={() => setShowCreate(false)} />}
+      {showCreate  && <CreateInvoiceModal onClose={() => setShowCreate(false)} onToast={toast} connected={connected} usingMock={usingMock} refetch={refetch} clients={D.clients} />}
       {previewInv  && <InvoicePreviewModal invoice={previewInv} onClose={() => setPreviewInv(null)} onToast={toast} />}
       {chaserInv   && <ChaserModal invoice={chaserInv} onClose={() => setChaserInv(null)} onToast={toast} />}
     </div>
   );
 }
 
-function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
+function CreateInvoiceModal({ onClose, onToast, connected, usingMock, refetch, clients }: {
+  onClose: () => void;
+  onToast?: (msg: string, type?: string, title?: string) => void;
+  connected: boolean;
+  usingMock: boolean;
+  refetch: () => Promise<void>;
+  clients: typeof D.clients;
+}) {
   const [step, setStep] = useState(1);
   const [client, setClient] = useState("");
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
+  const [creating, setCreating] = useState(false);
+  const { currency } = useMasrafApp();
+  async function createInvoice() {
+    const total = Number(amount);
+    if (!client || !desc || !(total > 0)) return;
+    if (apiConfig.useBackend && connected) {
+      setCreating(true);
+      try {
+        const subtotal = Math.round((total / 1.16) * 100) / 100;
+        await masrafApi.invoices.create({
+          title: desc,
+          titleAr: desc,
+          subtotal,
+          vatAmount: Math.round((total - subtotal) * 100) / 100,
+          total,
+          currency,
+          paymentTerms: "net_30",
+          dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+          status: "draft",
+          items: [{ description: desc, descriptionAr: desc, quantity: 1, unitPrice: subtotal, total: subtotal }],
+        });
+        await refetch();
+        onToast?.("تم إنشاء الفاتورة في الخلفية", "success", "فاتورة جديدة");
+        onClose();
+        return;
+      } catch {
+        onToast?.("تعذر إنشاء الفاتورة في الخلفية", "error", "فاتورة جديدة");
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+    if (usingMock || !apiConfig.useBackend) {
+      onToast?.("تم إنشاء فاتورة تجريبية محلياً", "success", "وضع العرض");
+      onClose();
+    }
+  }
   const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 14px", border: "1px solid #DDD6CA", borderRadius: 12, fontSize: 14, fontFamily: "IBM Plex Sans Arabic, sans-serif", background: "#FAFAF8", color: "#11100E", outline: "none", boxSizing: "border-box", textAlign: "right", direction: "rtl" };
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-end" }}>
@@ -243,7 +292,7 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
               <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>العميل</label>
               <select value={client} onChange={(e) => setClient(e.target.value)} style={inputStyle}>
                 <option value="">اختر العميل...</option>
-                {D.clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                {clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -256,12 +305,12 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>المبلغ (USD)</label>
+              <label style={{ fontSize: 12, color: "#6D675E", display: "block", marginBottom: 6 }}>المبلغ ({currency})</label>
               <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="٠" style={{ ...inputStyle, fontSize: 24, fontWeight: 700, textAlign: "center" }} />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setStep(1)} style={{ flex: 1, background: "#F1EDE5", color: "#11100E", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>← رجوع</button>
-              <button onClick={onClose} style={{ flex: 2, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "IBM Plex Sans Arabic" }}>✓ إنشاء الفاتورة</button>
+              <button onClick={() => void createInvoice()} disabled={creating || !amount} style={{ flex: 2, background: creating || !amount ? "#DDD6CA" : "#1B5E20", color: creating || !amount ? "#92897C" : "#FFFDF8", border: "none", borderRadius: 14, padding: "14px", fontSize: 15, fontWeight: 700, cursor: creating || !amount ? "not-allowed" : "pointer", fontFamily: "IBM Plex Sans Arabic" }}>{creating ? "جاري..." : "✓ إنشاء الفاتورة"}</button>
             </div>
           </div>
         )}
@@ -274,6 +323,7 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
 // ─── Clients ──────────────────────────────────────────────────────────────────
 export function ClientsScreen({ onNavigate }: { onNavigate: (page: string) => void }) {
   void onNavigate;
+  const { data: D } = useMasrafApp();
   const [selected, setSelected] = useState<typeof D.clients[0] | null>(null);
   const [sort, setSort] = useState("name");
   const sorted = [...D.clients].sort((a, b) => {
@@ -365,6 +415,7 @@ function ClientDetail({ client, onBack }: { client: typeof D.clients[0]; onBack:
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 export function ExpensesScreen({ toast }: { toast?: (msg: string, type?: string) => void }) {
+  const { data: D, refetch } = useMasrafApp();
   const [showScanner, setShowScanner] = useState(false);
   const txIcon = (category: string, type: string) => {
     if (type === "income") return Money03Icon;
@@ -422,13 +473,14 @@ export function ExpensesScreen({ toast }: { toast?: (msg: string, type?: string)
           ))}
         </div>
       </div>
-      {showScanner && <ReceiptScanner onClose={() => setShowScanner(false)} onToast={toast} />}
+      {showScanner && <ReceiptScanner onClose={() => setShowScanner(false)} onToast={toast} onSaved={refetch} />}
     </div>
   );
 }
 
 // ─── Zakat ────────────────────────────────────────────────────────────────────
 export function ZakatScreen({ toast }: { toast?: (msg: string, type?: string) => void }) {
+  const { data: D } = useMasrafApp();
   const z = D.zakat;
   const pct = Math.min(100, Math.round((z.eligible / z.nisab) * 100));
   return (
@@ -480,7 +532,36 @@ export function ZakatScreen({ toast }: { toast?: (msg: string, type?: string) =>
 
 // ─── Contracts ────────────────────────────────────────────────────────────────
 export function ContractsScreen() {
+  const { data: D, connected, refetch } = useMasrafApp();
   const [selected, setSelected] = useState<typeof D.contracts[0] | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [localContracts, setLocalContracts] = useState<typeof D.contracts>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const contracts = [...localContracts, ...D.contracts];
+  async function uploadContract(file?: File) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      if (apiConfig.useBackend && connected) {
+        await masrafApi.contracts.upload({ file, title: file.name.replace(/\.[^.]+$/, ""), titleAr: file.name.replace(/\.[^.]+$/, "") });
+        await refetch();
+      } else {
+        setLocalContracts((current) => [{
+          id: Date.now(),
+          title: file.name.replace(/\.[^.]+$/, ""),
+          client: "عميل",
+          status: "pending",
+          flagsCount: 0,
+          criticalFlags: 0,
+          amount: 0,
+          date: new Date().toLocaleDateString("ar-SA"),
+        }, ...current]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
   if (selected) return <ContractDetail contract={selected} onBack={() => setSelected(null)} />;
   return (
     <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
@@ -492,12 +573,13 @@ export function ContractsScreen() {
         </div>
       </div>
       <div style={{ padding: "16px" }}>
-        <div style={{ background: "#F3E5F5", border: "2px dashed #7B1FA2", borderRadius: 16, padding: "20px", textAlign: "center", marginBottom: 16, cursor: "pointer" }}>
+        <input ref={fileRef} type="file" accept=".pdf,application/pdf" style={{ display: "none" }} onChange={(event) => void uploadContract(event.currentTarget.files?.[0])} />
+        <div onClick={() => !uploading && fileRef.current?.click()} style={{ background: "#F3E5F5", border: "2px dashed #7B1FA2", borderRadius: 16, padding: "20px", textAlign: "center", marginBottom: 16, cursor: uploading ? "wait" : "pointer" }}>
           <div style={{ fontSize: 28 }}>📎</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>ارفع عقداً للتحليل</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#7B1FA2", marginTop: 8 }}>{uploading ? "جاري رفع العقد..." : "ارفع عقداً للتحليل"}</div>
           <div style={{ fontSize: 12, color: "#92897C", marginTop: 4 }}>PDF — يُحلّل الذكاء الاصطناعي البنود الخطرة فوراً</div>
         </div>
-        {D.contracts.map((c) => (
+        {contracts.map((c) => (
           <div key={c.id} onClick={() => setSelected(c)} style={{ background: "#FFFDF8", borderRadius: 16, padding: "14px 16px", marginBottom: 10, border: "1px solid #DDD6CA", cursor: "pointer" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ flex: 1 }}>
@@ -526,6 +608,16 @@ export function ContractsScreen() {
 }
 
 function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0]; onBack: () => void }) {
+  const analysisResult = (contract as typeof contract & { analysisResult?: { flags?: { severity?: string; titleAr?: string; title?: string; descriptionAr?: string; description?: string; recommendationAr?: string; recommendation?: string; clauseReference?: string }[]; summaryAr?: string; summary?: string } }).analysisResult;
+  const flags = Array.isArray(analysisResult?.flags) && analysisResult.flags.length > 0
+    ? analysisResult.flags.map((flag) => ({
+      severity: flag.severity || "info",
+      title: flag.titleAr || flag.title || "ملاحظة",
+      desc: flag.descriptionAr || flag.description || "لا يوجد وصف إضافي.",
+      recommendation: flag.recommendationAr || flag.recommendation || "راجع هذا البند قبل التوقيع.",
+      clause: flag.clauseReference || "—",
+    }))
+    : D.contractFlags;
   return (
     <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
       <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
@@ -537,7 +629,12 @@ function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0];
         </div>
       </div>
       <div style={{ padding: "16px" }}>
-        {D.contractFlags.map((flag, i) => (
+        {analysisResult?.summaryAr || analysisResult?.summary ? (
+          <div style={{ background: "#F0F7F0", border: "1px solid #C8E6C9", borderRadius: 14, padding: 12, color: "#1B5E20", fontSize: 12, lineHeight: 1.7, marginBottom: 12 }}>
+            {analysisResult.summaryAr || analysisResult.summary}
+          </div>
+        ) : null}
+        {flags.map((flag, i) => (
           <div key={i} style={{ background: "#FFFDF8", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid #DDD6CA" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 10, background: flag.severity === "critical" ? "#FFEBEE" : "#FFF3E0", color: flag.severity === "critical" ? "#B71C1C" : "#E65100" }}>
@@ -559,13 +656,14 @@ function ContractDetail({ contract, onBack }: { contract: typeof D.contracts[0];
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 export function ReportsScreen() {
+  const { data: D, connected } = useMasrafApp();
   return (
     <div style={{ background: "#FAFAF8", minHeight: "100%", paddingBottom: 90, fontFamily: "IBM Plex Sans Arabic, sans-serif" }}>
       <div style={{ background: "#1B5E20", padding: "20px 20px 20px", position: "relative", overflow: "hidden" }}>
         <IslamicPattern opacity={0.07} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#FFFDF8", marginBottom: 4 }}>التقارير</div>
-          <div style={{ fontSize: 13, color: "#D8D0C2" }}>ملخص مالي — أبريل ٢٠٢٦</div>
+          <div style={{ fontSize: 13, color: "#D8D0C2" }}>{connected ? "بيانات مباشرة من الخلفية" : "عرض تجريبي بدون خلفية"}</div>
         </div>
       </div>
       <div style={{ padding: "16px" }}>
@@ -597,7 +695,9 @@ export function ReportsScreen() {
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
-export function NotificationsScreen({ toast }: { toast?: (msg: string, type?: string, title?: string) => void }) {
+export function NotificationsScreen({ toast, onNavigate }: { toast?: (msg: string, type?: string, title?: string) => void; onNavigate?: (page: string) => void }) {
+  void toast;
+  const { data: D } = useMasrafApp();
   const overdue = D.invoices.filter((i) => i.status === "overdue");
   const notifications = [
     ...overdue.map((invoice) => ({
@@ -606,9 +706,10 @@ export function NotificationsScreen({ toast }: { toast?: (msg: string, type?: st
       body: `متأخرة ${invoice.daysOverdue} يوماً · ${fmt(invoice.amount)}`,
       critical: true,
       action: "ذكّر العميل",
+      screen: "invoices",
     })),
-    { id: "zakat", title: "موعد الزكاة قريب", body: `متبقي ${D.zakat.daysUntilDue} يوماً على موعد الدفع`, critical: false, action: "فتح الزكاة" },
-    { id: "contract", title: "عقد يحتاج مراجعة", body: "يوجد بند يحتاج توصية قبل التوقيع", critical: true, action: "مراجعة" },
+    { id: "zakat", title: "موعد الزكاة قريب", body: `متبقي ${D.zakat.daysUntilDue} يوماً على موعد الدفع`, critical: false, action: "فتح الزكاة", screen: "zakat" },
+    { id: "contract", title: "عقد يحتاج مراجعة", body: "يوجد بند يحتاج توصية قبل التوقيع", critical: true, action: "مراجعة", screen: "contracts" },
   ];
 
   return (
@@ -627,7 +728,7 @@ export function NotificationsScreen({ toast }: { toast?: (msg: string, type?: st
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 900, color: item.critical ? "#B71C1C" : "#8A6400", marginBottom: 4 }}>{item.title}</div>
                 <div style={{ fontSize: 12, color: "#5C5346", lineHeight: 1.6 }}>{item.body}</div>
-                <button onClick={() => toast?.("تم تنفيذ الإجراء", "success", item.action)} style={{ marginTop: 10, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>{item.action}</button>
+                <button onClick={() => onNavigate?.(item.screen)} style={{ marginTop: 10, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-ar)" }}>{item.action}</button>
               </div>
             </div>
           </div>
@@ -639,6 +740,7 @@ export function NotificationsScreen({ toast }: { toast?: (msg: string, type?: st
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 export function SettingsScreen({ toast }: { toast?: (msg: string, type?: string, title?: string) => void }) {
+  const { profile, notifications, updateNotification, currency, voicePersona } = useMasrafApp();
   return (
     <div style={{ minHeight: "100%", background: "#FAFAF8", paddingBottom: 24 }}>
       <div style={{ background: "#1B5E20", padding: "20px 20px 26px", color: "#FFFDF8" }}>
@@ -648,21 +750,31 @@ export function SettingsScreen({ toast }: { toast?: (msg: string, type?: string,
       <div style={{ padding: "16px 20px" }}>
         <div style={{ background: "#FFFDF8", border: "1px solid #DDD6CA", borderRadius: 18, padding: 16, marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-            <Avatar initials="أش" size={48} color="#1B5E20" />
+            <Avatar initials={profileInitials(profile)} size={48} color="#1B5E20" />
             <div>
-              <div style={{ fontSize: 16, fontWeight: 900, color: "#11100E" }}>أحمد الشمري</div>
-              <div style={{ fontSize: 12, color: "#6D675E" }}>شمري للتصميم</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#11100E" }}>{profile.name}</div>
+              <div style={{ fontSize: 12, color: "#6D675E" }}>{profile.business}</div>
             </div>
           </div>
-          {["العملة الافتراضية: USD", "لغة التقارير: العربية", "الثيم الأخضر القديم: مفعّل"].map((item) => (
+          {[
+            `العملة الافتراضية: ${currency}`,
+            "لغة التقارير: العربية",
+            `صوت المساعد: ${voicePersona === "fatima" ? "فاطمة" : "عبدالله"}`,
+            "الثيم الأخضر القديم: مفعّل",
+          ].map((item) => (
             <div key={item} style={{ padding: "10px 0", borderTop: "1px solid #F1EDE5", fontSize: 13, fontWeight: 700, color: "#1B5E20" }}>{item}</div>
           ))}
         </div>
         <div style={{ background: "#FFFDF8", border: "1px solid #DDD6CA", borderRadius: 18, padding: 16 }}>
-          {["تنبيهات الفواتير", "تذكير الزكاة", "تحليل العقود", "إشعارات التقارير"].map((item) => (
-            <label key={item} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #F1EDE5" }}>
+          {([
+            ["overdueInvoices", "تنبيهات الفواتير"],
+            ["zakatReminder", "تذكير الزكاة"],
+            ["contractAnalysis", "تحليل العقود"],
+            ["monthlyReports", "إشعارات التقارير"],
+          ] as const).map(([key, item]) => (
+            <label key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid #F1EDE5" }}>
               <span style={{ fontSize: 13, color: "#11100E", fontWeight: 800 }}>{item}</span>
-              <input type="checkbox" defaultChecked style={{ accentColor: "#1B5E20", width: 18, height: 18 }} />
+              <input type="checkbox" checked={notifications[key]} onChange={(event) => updateNotification(key, event.target.checked)} style={{ accentColor: "#1B5E20", width: 18, height: 18 }} />
             </label>
           ))}
           <button onClick={() => toast?.("تم حفظ الإعدادات", "success", "الإعدادات")} style={{ width: "100%", marginTop: 14, background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-ar)" }}>حفظ</button>

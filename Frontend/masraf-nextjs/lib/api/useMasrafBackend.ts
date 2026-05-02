@@ -34,14 +34,34 @@ export function useMasrafBackend(enabled = apiConfig.useBackend): BackendState {
     setError(null);
 
     try {
+      const failures: string[] = [];
+      let successfulRequests = 0;
+      const safe = async <T,>(label: string, task: Promise<T>, fallback: T): Promise<T> => {
+        try {
+          const result = await task;
+          successfulRequests += 1;
+          return result;
+        } catch (caught) {
+          failures.push(label);
+          if (apiConfig.strictBackend) {
+            throw caught;
+          }
+          return fallback;
+        }
+      };
+
       const [dashboard, clients, invoices, transactions, contracts, zakatRecords] = await Promise.all([
-        masrafApi.dashboard.get().catch(() => null),
-        masrafApi.clients.list(),
-        masrafApi.invoices.list({ sort: "created_at" }),
-        masrafApi.transactions.list(),
-        masrafApi.contracts.list(),
-        masrafApi.zakat.list(),
+        safe("dashboard", masrafApi.dashboard.get(), null),
+        safe("clients", masrafApi.clients.list(), []),
+        safe("invoices", masrafApi.invoices.list({ sort: "created_at" }), []),
+        safe("transactions", masrafApi.transactions.list(), []),
+        safe("contracts", masrafApi.contracts.list(), []),
+        safe("zakat", masrafApi.zakat.list(), []),
       ]);
+
+      if (successfulRequests === 0) {
+        throw new Error("Could not connect to the backend");
+      }
 
       setData(toMasrafDataFromBackend({
         dashboard,
@@ -52,6 +72,7 @@ export function useMasrafBackend(enabled = apiConfig.useBackend): BackendState {
         zakatRecords,
       }));
       setConnected(true);
+      setError(failures.length ? `Partial backend data: ${failures.join(", ")}` : null);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Could not connect to the backend";
       setConnected(false);

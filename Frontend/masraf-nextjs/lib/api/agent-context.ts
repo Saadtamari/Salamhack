@@ -11,9 +11,9 @@ function trimText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function buildAgentSessionSnapshot(data: MasrafData): CompactRecord {
+export function buildAgentSessionSnapshot(data: MasrafData, currencyOverride?: string): CompactRecord {
   const user = data.user;
-  const currency = trimText(user.currency) || "USD";
+  const currency = trimText(currencyOverride) || trimText(user.currency) || "USD";
 
   return {
     source: "frontend-session",

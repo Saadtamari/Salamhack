@@ -194,10 +194,10 @@ export function toMasrafDataFromBackend(input: {
       pending,
       overdue,
     },
-    clients: clients.length ? clients.map(toUiClient) : MASRAF_DATA.clients,
-    invoices: invoices.length ? invoices.map((invoice) => toUiInvoice(invoice, clients)) : MASRAF_DATA.invoices,
-    transactions: transactions.length ? transactions.map(toUiTransaction) : MASRAF_DATA.transactions,
-    contracts: contracts.length ? contracts.map((contract) => toUiContract(contract, clients)) : MASRAF_DATA.contracts,
+    clients: clients.map(toUiClient),
+    invoices: invoices.map((invoice) => toUiInvoice(invoice, clients)),
+    transactions: transactions.map(toUiTransaction),
+    contracts: contracts.map((contract) => toUiContract(contract, clients)),
     zakat: toUiZakat(latestZakat),
   };
 }

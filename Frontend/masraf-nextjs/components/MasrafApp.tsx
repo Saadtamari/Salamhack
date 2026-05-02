@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Agreement01Icon,
   AiVoiceIcon,
@@ -20,9 +20,8 @@ import { useToast } from "@/lib/useToast";
 import { ToastContainer } from "@/components/ToastContainer";
 import { VoiceOverlay } from "@/components/VoiceOverlay";
 import { MasrafIcon } from "@/components/icons";
-import { MASRAF_DATA } from "@/lib/data";
-import { useMasrafBackend } from "@/lib/api";
 import { buildAgentSessionSnapshot } from "@/lib/api/agent-context";
+import { MasrafProvider, useMasrafApp } from "@/lib/masraf-context";
 import {
   DashboardScreen, InvoicesScreen, ClientsScreen,
   ExpensesScreen, ZakatScreen, ContractsScreen, ReportsScreen,
@@ -54,6 +53,14 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
       <button onClick={() => step < steps.length - 1 ? setStep((v) => v + 1) : onDone()} style={{ background: "#1B5E20", color: "#FFFDF8", border: "none", borderRadius: 12, padding: "15px 0", fontSize: 16, fontWeight: 800, cursor: "pointer", width: "100%", maxWidth: 300, fontFamily: "var(--font-ar)" }}>{s.cta}</button>
       {step < steps.length - 1 && <button onClick={onDone} style={{ background: "none", border: "none", color: "#8A8276", fontSize: 13, fontWeight: 700, cursor: "pointer", marginTop: 14, fontFamily: "var(--font-ar)" }}>تخطّ</button>}
     </div>
+  );
+}
+
+export default function MasrafApp() {
+  return (
+    <MasrafProvider>
+      <MasrafAppShell />
+    </MasrafProvider>
   );
 }
 
@@ -89,23 +96,18 @@ function MoreDrawer({ onNavigate, onClose }: { onNavigate: (page: string) => voi
   );
 }
 
-export default function MasrafApp() {
+function MasrafAppShell() {
   const [screen, setScreen] = useState<"onboarding" | Page>("onboarding");
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const backend = useMasrafBackend();
+  const { data, refetch, currency, voicePersona, usingMock, error } = useMasrafApp();
   const { toasts, toast } = useToast();
-  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(backend.data), [backend.data]);
-
-  useEffect(() => {
-    Object.assign(MASRAF_DATA, backend.data);
-    (globalThis as typeof globalThis & { MASRAF_CURRENCY?: string }).MASRAF_CURRENCY = backend.data.user.currency;
-  }, [backend.data]);
+  const agentSessionData = useMemo(() => buildAgentSessionSnapshot(data, currency), [data, currency]);
 
   function navigate(page: string) { setScreen(page as Page); }
   function handleVoiceCommand(type: string, payload: string) {
     if (type === "navigate") navigate(payload);
-    if (type === "refresh") void backend.refetch();
+    if (type === "refresh") void refetch();
   }
 
   const screenMap: Record<Page, React.ReactNode> = {
@@ -116,7 +118,7 @@ export default function MasrafApp() {
     zakat:     <ZakatScreen     toast={toast} />,
     contracts: <ContractsScreen />,
     reports:   <ReportsScreen />,
-    notifications: <NotificationsScreen toast={toast} />,
+    notifications: <NotificationsScreen toast={toast} onNavigate={navigate} />,
     settings: <SettingsScreen toast={toast} />,
   };
 
@@ -153,6 +155,11 @@ export default function MasrafApp() {
         <ToastContainer toasts={toasts} />
 
         <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
+          {(error || usingMock) && (
+            <div style={{ margin: "52px 14px 0", background: error ? "#FFF9E8" : "#F0F7F0", border: `1px solid ${error ? "#FFE0A3" : "#C8E6C9"}`, color: error ? "#8A6400" : "#1B5E20", borderRadius: 12, padding: "9px 12px", fontSize: 11, fontWeight: 800, fontFamily: "var(--font-ar)", position: "relative", zIndex: 2 }}>
+              {error ? "بيانات جزئية من الخلفية" : "وضع العرض التجريبي"}
+            </div>
+          )}
           <div key={screen}>
             {screenMap[screen as Page] || screenMap.dashboard}
           </div>
@@ -189,7 +196,7 @@ export default function MasrafApp() {
 
         {voiceOpen && (
           <div style={{ position: "absolute", inset: 0, zIndex: 100, pointerEvents: "none" }}>
-            <VoiceOverlay currentScreen={screen} sessionData={agentSessionData} onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); if (t !== "refresh") setVoiceOpen(false); }} />
+            <VoiceOverlay currentScreen={screen} sessionData={agentSessionData} voicePersona={voicePersona} onClose={() => setVoiceOpen(false)} onCommand={(t, p) => { handleVoiceCommand(t, p); if (t !== "refresh") setVoiceOpen(false); }} />
           </div>
         )}
 

@@ -284,7 +284,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"periodStart\": \"2026-01-01\",\n  \"periodEnd\": \"2026-04-30\",\n  \"totalIncome\": 24000,\n  \"qualifyingAssets\": 18000,\n  \"nisabThreshold\": 5200,\n  \"zakatRate\": 0.025,\n  \"currency\": \"USD\",\n  \"paid\": false,\n  \"calculationDetails\": {\n    \"source\": \"manual\",\n    \"notes\": \"Quarterly estimate\"\n  }\n}"
+              "raw": "{\n  \"periodStart\": \"2026-01-01\",\n  \"periodEnd\": \"2026-04-30\",\n  \"totalIncome\": 24000,\n  \"qualifyingAssets\": 18000,\n  \"nisabThreshold\": 8400,\n  \"zakatRate\": 0.025,\n  \"currency\": \"USD\",\n  \"paid\": false,\n  \"calculationDetails\": {\n    \"source\": \"manual\",\n    \"notes\": \"Quarterly estimate\"\n  }\n}"
             },
             "url": "{{baseUrl}}/api/zakat/calculate"
           }

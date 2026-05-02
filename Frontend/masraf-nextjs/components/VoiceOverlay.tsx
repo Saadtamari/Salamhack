@@ -13,6 +13,8 @@ import {
 import { masrafApi } from "@/lib/api";
 import type { AgentAction, AgentHistoryMessage, AgentPage, AgentRunResult } from "@/lib/api/types";
 import { getRuntimeVoicePersona, type VoicePersona } from "@/lib/voice-preferences";
+import { useMasrafApp } from "@/lib/masraf-context";
+import { buildInvoiceHtml } from "@/lib/invoice-pdf";
 import { MasrafIcon } from "./icons";
 
 type Phase = "idle" | "listening" | "processing" | "responding" | "error";
@@ -30,11 +32,17 @@ export function VoiceOverlay({
   sessionData?: Record<string, unknown>;
   voicePersona?: VoicePersona;
 }) {
+  const { profile, currency } = useMasrafApp();
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
   const [message, setMessage] = useState("جاهزة");
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [downloadReady, setDownloadReady] = useState<{
+    invoiceId: string; invoiceNumber: string; title: string; titleEn: string;
+    totalAmount: number; subtotal: number; vatAmount: number; currency: string;
+    dueDate: string | null; status: string; paymentTerms: string; pdfUrl: string | null;
+  } | null>(null);
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(18).fill(6));
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -188,6 +196,27 @@ export function VoiceOverlay({
       onCommand("refresh", "");
     }
 
+    if (agent.action?.tool === "invoices.download" && agent.status === "executed") {
+      const d = agent.actionResult?.data as Record<string, unknown> | undefined;
+      if (d?.invoiceId) {
+        setDownloadReady({
+          invoiceId: String(d.invoiceId),
+          invoiceNumber: String(d.invoiceNumber ?? d.invoiceId),
+          title: String(d.title ?? d.titleEn ?? d.invoiceNumber ?? ""),
+          titleEn: String(d.titleEn ?? d.title ?? ""),
+          totalAmount: Number(d.totalAmount ?? 0),
+          subtotal: Number(d.subtotal ?? 0),
+          vatAmount: Number(d.vatAmount ?? 0),
+          currency: String(d.currency ?? currency),
+          dueDate: d.dueDate ? String(d.dueDate) : null,
+          status: String(d.status ?? "draft"),
+          paymentTerms: String(d.paymentTerms ?? "net_30"),
+          pdfUrl: d.pdfUrl ? String(d.pdfUrl) : null,
+        });
+      }
+      return;
+    }
+
     if (agent.action?.tool === "ui.navigate" && target) {
       onCommand("navigate", target);
       onClose();
@@ -333,6 +362,39 @@ export function VoiceOverlay({
                   </button>
                 </>
               )}
+
+              {downloadReady && (
+                <button
+                  onClick={() => {
+                    const win = window.open("", "_blank", "width=720,height=960");
+                    if (!win) return;
+                    const dr = downloadReady;
+                    const sym: Record<string, string> = { USD: "$", SAR: "ر.س", AED: "د.إ", JOD: "د.أ", EGP: "ج.م", KWD: "د.ك" };
+                    const html = buildInvoiceHtml({
+                      id: dr.invoiceNumber,
+                      client: dr.title,
+                      clientEn: dr.titleEn,
+                      amount: dr.totalAmount,
+                      due: dr.dueDate ?? "—",
+                      status: dr.status,
+                      business: profile.business || "مصرف",
+                      currency: dr.currency,
+                      sym: sym[dr.currency] || dr.currency,
+                      subtotal: dr.subtotal,
+                      vat: dr.vatAmount,
+                      terms: dr.paymentTerms,
+                      description: dr.title,
+                    });
+                    win.document.write(html);
+                    win.document.close();
+                    win.focus();
+                    setTimeout(() => win.print(), 450);
+                  }}
+                  style={{ ...primaryButtonStyle, flex: 1 }}
+                >
+                  تحميل فاتورة {downloadReady.invoiceNumber}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -389,6 +451,7 @@ function actionLabel(tool: string) {
     case "invoices.create_draft": return "إنشاء مسودة فاتورة";
     case "invoices.send": return "إرسال فاتورة";
     case "invoices.send_reminder": return "إرسال تذكير دفع";
+    case "invoices.download": return "تحميل فاتورة PDF";
     case "zakat.calculate": return "حساب الزكاة";
     case "reports.generate": return "إنشاء تقرير";
     case "ui.navigate": return "التنقل";

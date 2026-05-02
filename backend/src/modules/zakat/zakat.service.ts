@@ -46,7 +46,7 @@ export class ZakatService {
         periodEnd: payload.periodEnd ?? String(existing.periodEnd),
         totalIncome: payload.totalIncome ?? toNumber(existing.totalIncome) ?? 0,
         qualifyingAssets: payload.qualifyingAssets ?? toNumber(existing.qualifyingAssets) ?? 0,
-        nisabThreshold: payload.nisabThreshold ?? toNumber(existing.nisabThreshold) ?? 5200,
+        nisabThreshold: payload.nisabThreshold ?? toNumber(existing.nisabThreshold) ?? 8400,
         zakatRate: payload.zakatRate ?? toNumber(existing.zakatRate) ?? 0.025,
         currency: payload.currency ?? existing.currency,
         paid: payload.paid ?? existing.paid,
@@ -79,7 +79,7 @@ export class ZakatService {
 
     const totalIncome = toNumber(payload.totalIncome) ?? 0;
     const qualifyingAssets = toNumber(payload.qualifyingAssets) ?? totalIncome;
-    const nisabThreshold = toNumber(payload.nisabThreshold) ?? 5200;
+    const nisabThreshold = toNumber(payload.nisabThreshold) ?? 8400;
     const zakatRate = toNumber(payload.zakatRate) ?? 0.025;
     const aboveNisab = qualifyingAssets >= nisabThreshold;
     const zakatAmount = aboveNisab ? qualifyingAssets * zakatRate : 0;
